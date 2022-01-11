@@ -1,6 +1,8 @@
-export type PieceColor = "Black" | "White";
+import { Players, Bugs } from "@/logic/game";
 
-export type PieceType = "Ant" | "Beetle" | "Grasshopper" | "Ladybug" | "Mosquito" | "Pillbug" | "QueenBee" | "Spider";
+export type PieceColor = keyof typeof Players;
+
+export type PieceType = keyof typeof Bugs;
 
 export interface Piece {
     type: PieceType;

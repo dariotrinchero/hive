@@ -1,8 +1,10 @@
-import * as d3 from 'd3';
+import * as d3 from "d3";
 import { LatticeCoords, Piece, PieceColor, PieceType } from "@/types/common/piece";
-import { MovementOutcome, PlacementOutcome } from "@/types/common/status";
-import { PieceTile, ScreenCoords, SVGContainer, SVGGroup, SVGPath, Tile } from "@/types/components/board";
+import { MovementOutcome, PlacementOutcome, TurnOutcome } from "@/types/common/status";
+import { PieceTile, ScreenCoords, SVGContainer, Tile } from "@/types/components/board";
 import HiveGame from "@/logic/game";
+import Notation from "@/logic/notation";
+import { Move, ParseError } from "@/types/logic/notation";
 // import icons from "@/ui/icons.svg";
 
 export default class Board {
@@ -11,18 +13,18 @@ export default class Board {
 
     // static lookup-tables
     private static tileColorMap: { [color in PieceColor]: string } = {
-        Black: "#535049",
+        Black: "#363430",
         White: "#f3ecde"
     };
     private static bugColorMap: { [bug in PieceType]: string } = {
-        Ant: "#009ddc",
-        Beetle: "#8a7ffc",
-        Grasshopper: "#40ab48",
-        Ladybug: "#d03749",
-        Mosquito: "#9ba1a9",
-        Pillbug: "#0be5cc",
-        QueenBee: "#f3b034",
-        Spider: "#c1563e"
+        Ant: "#0fa9f0",
+        Beetle: "#8779b9",
+        Grasshopper: "#2fbc3d",
+        Ladybug: "#d72833",
+        Mosquito: "#a6a6a6",
+        Pillbug: "#49ad92",
+        QueenBee: "#fcb336",
+        Spider: "#9f622d"
     };
     private static bugScaleMap: { [bug in PieceType]: number } = {
         // ratio bugHeight/hexRadius which looks best for each bug
@@ -50,14 +52,13 @@ export default class Board {
     private gappedHexRad: number;
     private horSpacing: number;
     private vertSpacing: number;
-    private hexPoints: number[][];
+    private hexPath: d3.Path;
 
     // selection tracking
     private selectedTile?: PieceTile;
     private placeholders: Tile[] = [];
 
-    public constructor(width: number, height: number, hexRad: number, hexRadGap: number) {
-        // TODO add option for rounded corners
+    public constructor(width: number, height: number, hexRad: number, cornerRad: number, hexRadGap: number) {
         Board.svgContainer = d3
             .select("svg")
             .attr("width", width)
@@ -69,10 +70,7 @@ export default class Board {
         this.gappedHexRad = hexRad + hexRadGap;
         this.horSpacing = Math.sqrt(3) * this.gappedHexRad;
         this.vertSpacing = 1.5 * this.gappedHexRad;
-        this.hexPoints = d3.range(8).map(i => {
-            const theta = i * Math.PI / 3;
-            return [hexRad * Math.sin(theta), hexRad * Math.cos(theta)];
-        });
+        this.hexPath = Board.getRoundedHexPath(hexRad, cornerRad);
 
         // TODO: Find a good way of adding SVG defs to index.html in this constructor
         // d3.xml(icons).then(data => {
@@ -81,12 +79,39 @@ export default class Board {
         // }).catch(error => console.error(`Unable to initialize board UI due to error: ${error}`));
     }
 
-    private addHexToGroup(group: SVGGroup): SVGPath {
-        return group.selectAll("path.area")
-            .data([this.hexPoints])
-            .enter()
-            .append("path")
-            .attr("d", d3.line());
+    private static getRoundedHexPath(hexRad: number, cornerRad: number): d3.Path {
+        const thirdPi: number = Math.PI / 3;
+        const innerRad: number = hexRad - cornerRad;
+        const path: d3.Path = d3.path();
+
+        d3.range(6).forEach(i => {
+            const theta: number = i * thirdPi;
+            const sin: number = Math.sin(theta);
+            const cos: number = Math.cos(theta);
+            const pts: number[][] = [1, -1].map((d: number) => [
+                innerRad * sin + cornerRad * Math.sin(theta - d * thirdPi),
+                innerRad * cos + cornerRad * Math.cos(theta - d * thirdPi)
+            ]);
+            if (i === 0) path.moveTo(pts[0][0], pts[0][1]);
+            else path.lineTo(pts[0][0], pts[0][1]);
+            path.arcTo(hexRad * sin, hexRad * cos, pts[1][0], pts[1][1], cornerRad);
+        });
+        path.closePath();
+        return path;
+    }
+
+    public placeTile(u: number, v: number, pieceStr: string): PlacementOutcome | ParseError {
+        const piece: Piece | ParseError = Notation.stringToPiece(pieceStr);
+        if (piece === "ParseError") return "ParseError";
+        return this.spawnTile(u, v, piece);
+    }
+
+    public makeMove(moveStr: string): TurnOutcome | ParseError {
+        const move: Move | ParseError = Notation.stringToMove(moveStr);
+        if (move === "ParseError") return "ParseError";
+
+        // TODO find destination coords and place
+        return "Success";
     }
 
     /**
@@ -97,34 +122,30 @@ export default class Board {
      * @param piece piece represented by tile
      * @returns TODO
      */
-    public spawnTile(u: number, v: number, piece: Piece): PieceTile | PlacementOutcome {
+    private spawnTile(u: number, v: number, piece: Piece): PlacementOutcome {
         // ask game to spawn piece & exit if illegal
         const outcome: PlacementOutcome = Board.game.spawnPiece(u, v, piece);
-        console.log(outcome);
-        if (outcome !== "Success") return outcome;
 
         // spawn piece
         const { x, y } = this.convertCoordinates({ u, v });
         const tileHandle = Board.svgContainer
             .append("g")
             .attr("transform", `translate(${x},${y})`);
-        const hex = this.addHexToGroup(tileHandle)
+        const hex = tileHandle
+            .append("path")
+            .attr("d", this.hexPath.toString())
             .style("fill", Board.tileColorMap[piece.color])
             .style("stroke-width", `${this.hexRadGap * Math.sqrt(3)}px`);
 
         // bind mouse events
         tileHandle.on("mouseenter", () => {
-            if (typeof this.selectedTile === "undefined") {
-                hex.style("stroke", Board.uiColors.hover);
-            }
+            if (!this.selectedTile) hex.style("stroke", Board.uiColors.hover);
         });
         tileHandle.on("mouseleave", () => {
-            if (typeof this.selectedTile === "undefined") {
-                hex.style("stroke", "none");
-            }
+            if (!this.selectedTile) hex.style("stroke", "none");
         });
         tileHandle.on("click", () => {
-            if (typeof this.selectedTile === "undefined") {
+            if (!this.selectedTile) {
                 this.selectedTile = { pos: { u, v }, piece, tileHandle };
                 hex.style("stroke", Board.uiColors.selected);
             } else if (this.selectedTile.pos.u === u && this.selectedTile.pos.v === v) {
@@ -139,15 +160,16 @@ export default class Board {
             .style("fill", Board.bugColorMap[piece.type])
             .style("stroke", Board.bugColorMap[piece.type]);
 
-        let bugBBox = bug.node()?.getBoundingClientRect();
+        const bugBBox = bug.node()?.getBoundingClientRect();
         if (bugBBox) {
-            bug.attr("transform", `scale(${Board.bugScaleMap[piece.type] * this.hexRadius / bugBBox.height})` +
-                `translate(-${bugBBox.width / 2 - 2},-${bugBBox.height / 2})`); // why 2px off for x translation?
+            const scale: number = Board.bugScaleMap[piece.type] * this.hexRadius / bugBBox.height;
+            // TODO why 2px off for x translation?
+            bug.attr("transform", `scale(${scale})translate(-${bugBBox.width / 2 - 2},-${bugBBox.height / 2})`);
         } else {
             console.error("Cannot determine bug icon bounding box.");
         }
 
-        return ({ piece, pos: { u, v }, tileHandle });
+        return outcome;
     }
 
     /**
@@ -167,7 +189,9 @@ export default class Board {
             .style("fill", "#ffffff00")
             .attr("transform", `translate(${x},${y})`);
         [0.95, 0.6].forEach((scale, index) => {
-            const outline = this.addHexToGroup(tileHandle)
+            const outline = tileHandle
+                .append("path")
+                .attr("d", this.hexPath.toString())
                 .attr("transform", `scale(${scale})`);
             if (index === 0) outline.style("stroke-dasharray", ("8, 4"));
         });

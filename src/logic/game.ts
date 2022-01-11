@@ -1,14 +1,28 @@
 import { GameStatus, MovementOutcome, PlacementOutcome } from "@/types/common/status";
 import { Piece, PieceColor } from "@/types/common/piece";
 import { LatticeCoords } from "@/types/common/piece";
-import { Inventory, PieceSpace, PlayerInventories, PlacementCount, QueenPos } from "@/types/logic/game";
+import { Inventory, PieceSpace, PlayerInventories, PlacementCount, PlayerPiecePositions } from "@/types/logic/game";
 import GraphUtils from "./graph";
 import { BFSResults } from "@/types/logic/graph";
 
-export default class HiveGame {
-    private playArea: PieceSpace[][];
+export enum Players {
+    "Black",
+    "White"
+}
 
-    private static startingInventory: Inventory = {
+export enum Bugs {
+    "Ant",
+    "Beetle",
+    "Grasshopper",
+    "Ladybug",
+    "Mosquito",
+    "Pillbug",
+    "QueenBee",
+    "Spider"
+}
+
+export default class HiveGame {
+    public static startingInventory: Inventory = {
         Ant: 3,
         Beetle: 2,
         Grasshopper: 3,
@@ -18,13 +32,17 @@ export default class HiveGame {
         QueenBee: 1,
         Spider: 2
     };
-    private static adjacencies: number[][] = [
-        [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1] // anticlockwise from -->
-    ];
+    private static adjacencies = [
+        // anticlockwise around reference from o-->
+        [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]
+    ] as const;
+
+    private playArea: PieceSpace[][];
+    private piecePositions: PlayerPiecePositions;
 
     private playerInventories: PlayerInventories;
     private placementCount: PlacementCount;
-    private queenPos: QueenPos;
+
     private turnCount: number;
     private currTurnColor: PieceColor = "Black";
     private gameStatus: GameStatus;
@@ -37,13 +55,17 @@ export default class HiveGame {
             this.playArea[i] = new Array<PieceSpace>(playSpaceSize).fill(null);
         }
 
+        const piecePositionsEntries = Object.keys(Bugs).map(bug => [bug, []]);
+        this.piecePositions = {
+            Black: Object.fromEntries(piecePositionsEntries),
+            White: Object.fromEntries(piecePositionsEntries)
+        };
         this.playerInventories = {
             Black: { ...HiveGame.startingInventory },
             White: { ...HiveGame.startingInventory }
         };
         this.placementCount = { Black: 0, White: 0 };
         this.turnCount = 0;
-        this.queenPos = { Black: null, White: null };
         this.gameStatus = "Ongoing";
     }
 
@@ -117,7 +139,9 @@ export default class HiveGame {
         const outcome: PlacementOutcome = this.checkSpawn(u, v, piece);
         if (outcome === "Success") {
             if (this.turnCount === 0) this.currTurnColor = piece.color;
-            if (piece.type === "QueenBee") this.queenPos[piece.color] = { u, v };
+            const positions = this.piecePositions[piece.color][piece.type];
+            positions.push({ u, v });
+            piece.index = positions.length;
             this.setAtPos({ u, v }, piece);
             this.placementCount[piece.color] += 1;
             this.playerInventories[piece.color][piece.type] -= 1;
@@ -155,7 +179,7 @@ export default class HiveGame {
     }
 
     private checkFreedomToMove(fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
-        // TODO
+        // TODO NOTE that a beetle may not mount / dismount through a second-level gate
         return true;
     }
 
@@ -235,6 +259,8 @@ export default class HiveGame {
         const outcome: MovementOutcome = this.checkMove(fromPos, toPos);
         if (outcome === "Success") {
             const piece: Piece = this.getFromPos(fromPos) as Piece;
+            const positions = this.piecePositions[piece.color][piece.type];
+            positions[piece.index || positions.length - 1] = toPos;
             this.setAtPos(fromPos, null);
             this.setAtPos(toPos, piece);
             this.advanceTurn();
@@ -243,9 +269,11 @@ export default class HiveGame {
     }
 
     public checkGameStatus(): GameStatus {
-        if (this.queenPos.Black === null || this.queenPos.White === null) return "Ongoing";
-        const blackSurrounded: boolean = this.adjPieceCoords(this.queenPos.Black).length === 6;
-        const whiteSurrounded: boolean = this.adjPieceCoords(this.queenPos.White).length === 6;
+        const blackBeePos: LatticeCoords[] = this.piecePositions.Black.QueenBee;
+        const whiteBeePos: LatticeCoords[] = this.piecePositions.White.QueenBee;
+        if (blackBeePos.length === 0 || whiteBeePos.length === 0) return "Ongoing";
+        const blackSurrounded: boolean = this.adjPieceCoords(blackBeePos[0]).length === 6;
+        const whiteSurrounded: boolean = this.adjPieceCoords(whiteBeePos[0]).length === 6;
         if (blackSurrounded && whiteSurrounded) return "Draw";
         if (blackSurrounded) return "WhiteWin";
         return "BlackWin";

@@ -1,16 +1,16 @@
 import { PieceType } from "@/types/common/piece";
 
-type CommonOutcome = "Success" 
+type CommonOutcome = "Success"
     | "ErrOutOfTurn"
     | "ErrDestinationOccupied"
     | "ErrOneHiveRule";
-
-type PieceMovementError = `ErrViolates${PieceType}Movement`;
 
 export type PlacementOutcome = CommonOutcome
     | "ErrMustBeQueen"
     | "ErrTouchesOppColor"
     | "ErrOutOfPieces";
+
+type PieceMovementError = `ErrViolates${PieceType}Movement`;
 
 export type MovementOutcome = CommonOutcome
     | PieceMovementError
@@ -18,5 +18,7 @@ export type MovementOutcome = CommonOutcome
     | "ErrFreedomToMoveRule"
     | "ErrNoPieceFound"
     | "ErrAlreadyThere";
+
+export type TurnOutcome = PlacementOutcome | MovementOutcome;
 
 export type GameStatus = "Ongoing" | "BlackWin" | "WhiteWin" | "Draw";

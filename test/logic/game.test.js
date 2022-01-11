@@ -15,6 +15,10 @@ describe("When new piece is placed", () => {
         expect(piece.type).toBe("Grasshopper");
     });
 
+    it("correctly sets the index", () => {
+        // TODO
+    });
+
     it("rejects if out-of-turn", () => {
         expect(game.spawnPiece(0, 0, { color: "Black", type: "Grasshopper" })).toBe("Success");
         expect(game.spawnPiece(0, 1, { color: "Black", type: "Ant" })).toBe("ErrOutOfTurn");
