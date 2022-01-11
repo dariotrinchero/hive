@@ -2,20 +2,21 @@ import { BFSResults } from "@/types/logic/graph";
 
 export default class GraphUtils {
     public static bfs<V>(source: V, adj: (vertex: V) => V[]): BFSResults<V> {
-        const edgeTo = new Map<V, V>();
-        const marked = new Map<V, boolean>();
-        const connectedCount: number = 0;
-
+        const edgeTo: { [edge: string]: V } = {};
+        const marked: { [edge: string]: boolean } = {};
         const queue: V[] = [];
-        marked.set(source, true);
+        
+        let connectedCount: number = 0;
+        marked[JSON.stringify(source)] = true;
         queue.push(source);
         while (queue.length > 0) {
             const v: V = queue.shift() as V;
             adj(v).forEach((w: V) => {
-                if (!marked.get(w)) {
-                    edgeTo.set(w, v);
-                    marked.set(w, true);
+                if (!marked[JSON.stringify(w)]) {
+                    edgeTo[JSON.stringify(w)] = v;
+                    marked[JSON.stringify(w)] = true;
                     queue.push(w);
+                    connectedCount += 1;
                 }
             });
         }

@@ -57,6 +57,7 @@ export default class Board {
     private placeholders: Tile[] = [];
 
     public constructor(width: number, height: number, hexRad: number, hexRadGap: number) {
+        // TODO add option for rounded corners
         Board.svgContainer = d3
             .select("svg")
             .attr("width", width)

@@ -1,13 +1,17 @@
-import { PieceColor, PieceType } from "@/types/common/piece";
+import { LatticeCoords, Piece, PieceColor, PieceType } from "@/types/common/piece";
 
-export type Inventory = {
-    [bug in PieceType]: number;
-};
+export type IntCoord = number;
 
-export type PlayerInventories = {
-    [color in PieceColor]: Inventory;
-};
+export type PieceSpace = Piece | null;
 
-export type PlacementCount = {
-    [color in PieceColor]: number;
-};
+export type Inventory = Record<PieceType, number>;
+export type PlayerInventories = Record<PieceColor, Inventory>;
+
+export type PlacementCount = Record<PieceColor, number>;
+
+export type PiecePositions = Record<PieceType, LatticeCoords | null>;
+export type PlayerPiecePositions = Record<PieceColor, PiecePositions>;
+
+export type QueenPos = {
+    [color in PieceColor]: LatticeCoords | null;
+}

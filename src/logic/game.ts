@@ -1,11 +1,9 @@
-import { MovementOutcome, PlacementOutcome } from "@/types/common/status";
+import { GameStatus, MovementOutcome, PlacementOutcome } from "@/types/common/status";
 import { Piece, PieceColor } from "@/types/common/piece";
 import { LatticeCoords } from "@/types/common/piece";
-import { Inventory, PlayerInventories, PlacementCount } from "@/types/logic/game";
+import { Inventory, PieceSpace, PlayerInventories, PlacementCount, QueenPos } from "@/types/logic/game";
 import GraphUtils from "./graph";
 import { BFSResults } from "@/types/logic/graph";
-
-type PieceSpace = Piece | null;
 
 export default class HiveGame {
     private playArea: PieceSpace[][];
@@ -21,20 +19,15 @@ export default class HiveGame {
         Spider: 2
     };
     private static adjacencies: number[][] = [
-        // from right adjacency anticlockwise
-        [1, 0],
-        [1, -1],
-        [0, -1],
-        [-1, 0],
-        [-1, 1],
-        [0, 1]
+        [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1] // anticlockwise from -->
     ];
 
     private playerInventories: PlayerInventories;
-    private startingPiecePos?: LatticeCoords;
     private placementCount: PlacementCount;
+    private queenPos: QueenPos;
     private turnCount: number;
     private currTurnColor: PieceColor = "Black";
+    private gameStatus: GameStatus;
 
     public constructor() {
         const playSpaceSize: number = 2 * Object.values(HiveGame.startingInventory)
@@ -50,44 +43,61 @@ export default class HiveGame {
         };
         this.placementCount = { Black: 0, White: 0 };
         this.turnCount = 0;
+        this.queenPos = { Black: null, White: null };
+        this.gameStatus = "Ongoing";
     }
 
-    public getPos(pos: LatticeCoords): PieceSpace {
-        return this.playArea[this.mod(pos.u)][this.mod(pos.v)];
+    public getFromPos(pos: LatticeCoords): PieceSpace {
+        // TODO this does not handle beetles mounting / dismounting
+        pos = this.mod(pos);
+        return this.playArea[pos.u][pos.v];
     }
 
-    private setPos(pos: LatticeCoords, piece: PieceSpace): void {
-        this.playArea[this.mod(pos.u)][this.mod(pos.v)] = piece;
+    private setAtPos(pos: LatticeCoords, piece: PieceSpace): void {
+        // TODO this does not handle beetles mounting / dismounting
+        pos = this.mod(pos);
+        this.playArea[pos.u][pos.v] = piece;
     }
 
-    private mod(coord: number): number {
+    private mod(pos: LatticeCoords): LatticeCoords {
         const len: number = this.playArea.length;
-        return (coord % len + len) % len;
+        const m = (coord: number) => (coord % len + len) % len;
+        return { u: m(pos.u), v: m(pos.v) };
+    }
+
+    private equalPos(pos1: LatticeCoords, pos2: LatticeCoords) {
+        pos1 = this.mod(pos1);
+        pos2 = this.mod(pos2);
+        return pos1.u === pos2.u && pos1.v === pos2.v;
+    }
+
+    private adjCoords(pos: LatticeCoords): LatticeCoords[] {
+        return HiveGame.adjacencies.map(([du, dv]) => this.mod({ u: pos.u + du, v: pos.v + dv }));
     }
 
     private adjPieceCoords(pos: LatticeCoords): LatticeCoords[] {
-        return HiveGame.adjacencies
-            .map(([du, dv]) => ({ u: this.mod(pos.u + du), v: this.mod(pos.v + dv) }))
-            .filter((pos: LatticeCoords) => this.getPos(pos) !== null);
+        return this.adjCoords(pos).filter(pos => this.getFromPos(pos) !== null);
+    }
+
+    private adjPieces(pos: LatticeCoords): Piece[] {
+        return this.adjPieceCoords(pos).map(pos => this.getFromPos(pos) as Piece);
     }
 
     private advanceTurn(): void {
         this.turnCount += 1;
         this.currTurnColor = this.currTurnColor === "Black" ? "White" : "Black";
+        this.gameStatus = this.checkGameStatus();
     }
 
     private checkSpawn(u: number, v: number, piece: Piece): PlacementOutcome {
         // always accept first placement
         if (this.turnCount === 0) return "Success";
 
-        // reject if out-of-turn
+        // basic immediate rejections
         if (this.currTurnColor !== piece.color) return "ErrOutOfTurn";
-
-        // reject if player lacks inventory
+        if (this.getFromPos({ u, v }) !== null) return "ErrDestinationOccupied";
         if (this.playerInventories[piece.color][piece.type] <= 0) return "ErrOutOfPieces";
-
-        // reject disconnected placements after first placement
-        if (this.adjPieceCoords({ u, v }).length === 0) return "ErrDisconnected";
+        if (this.adjPieceCoords({ u, v }).length === 0) return "ErrOneHiveRule";
 
         // reject if 4th placement is anything but queen (if unplayed)
         if (this.placementCount[piece.color] === 3 && this.playerInventories[piece.color].QueenBee === 1
@@ -96,11 +106,9 @@ export default class HiveGame {
         }
 
         // reject if touching opposing color (after second placement)
-        if (this.placementCount[piece.color] > 0) {
-            const touchesOppColor: boolean = this.adjPieceCoords({ u, v })
-                .map((pos: LatticeCoords) => this.getPos(pos))
-                .some((p: PieceSpace) => p?.color !== piece.color);
-            if (touchesOppColor) return "ErrTouchesOppColor";
+        if (this.placementCount[piece.color] > 0
+            && this.adjPieces({ u, v }).some(p => p.color !== piece.color)) {
+            return "ErrTouchesOppColor";
         }
         return "Success";
     }
@@ -108,11 +116,9 @@ export default class HiveGame {
     public spawnPiece(u: number, v: number, piece: Piece): PlacementOutcome {
         const outcome: PlacementOutcome = this.checkSpawn(u, v, piece);
         if (outcome === "Success") {
-            if (this.turnCount === 0) {
-                this.currTurnColor = piece.color;
-                this.startingPiecePos = { u, v };
-            }
-            this.setPos({ u, v }, piece);
+            if (this.turnCount === 0) this.currTurnColor = piece.color;
+            if (piece.type === "QueenBee") this.queenPos[piece.color] = { u, v };
+            this.setAtPos({ u, v }, piece);
             this.placementCount[piece.color] += 1;
             this.playerInventories[piece.color][piece.type] -= 1;
             this.advanceTurn();
@@ -121,59 +127,103 @@ export default class HiveGame {
     }
 
     private checkOneHive(fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
+        const adjIgnoringFromPos = (pos: LatticeCoords) => this.adjPieceCoords(pos)
+            .filter(p => !this.equalPos(fromPos, p));
+
         // reject if destination is not touching hive
+        if (adjIgnoringFromPos(toPos).length === 0) return false;
+
+        // accept all beetle moves starting on top of hive
         // TODO
 
-        // accept if all adjacent pieces already connect
-        const { u, v } = fromPos;
+        // accept if all adjacent pieces already connect with each other
         let lastSeenSpace: boolean = true;
         let groupsSeen: number = 0;
-        HiveGame.adjacencies.forEach(([du, dv]) => {
-            if (this.getPos({ u: u + du, v: v + dv }) !== null) {
+        const adjacent: LatticeCoords[] = this.adjCoords(fromPos);
+        adjacent.forEach(pos => {
+            if (this.getFromPos(pos) !== null) {
                 if (lastSeenSpace) groupsSeen += 1;
                 lastSeenSpace = false;
-            } else {
-                lastSeenSpace = true;
-            }
+            } else lastSeenSpace = true;
         });
-        if (!lastSeenSpace && this.getPos({ u: u + 1, v }) !== null) {
-            // in this case, we began looking in the middle of a connected group
-            groupsSeen -= 1;
-        }
-        if (groupsSeen === 1) {
-            console.log("Shortcutted One-Hive test.");
-            return true;
-        }
+        if (!lastSeenSpace && this.getFromPos(adjacent[0]) !== null) groupsSeen -= 1; // if we began in connected group
+        if (groupsSeen === 1) return true;
 
         // reject if removing piece from original location disconnects hive
-        const adjIgnoringFromPos = (pos: LatticeCoords) => this.adjPieceCoords(pos)
-            .filter((pos: LatticeCoords) => pos.u !== fromPos.u || pos.v !== fromPos.v);
         const bfsResults: BFSResults<LatticeCoords> = GraphUtils.bfs(this.adjPieceCoords(fromPos)[0], adjIgnoringFromPos);
-        return bfsResults.connectedCount === this.placementCount.Black + this.placementCount.White;
+        return bfsResults.connectedCount === this.placementCount.Black + this.placementCount.White - 2;
+    }
+
+    private checkFreedomToMove(fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
+        // TODO
+        return true;
+    }
+
+    private checkGrasshopperMove(fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
+        // check that gradient of movement line is 0, infinity, or -1
+        // TODO the below does not account for wrapping
+        // const deltaU: number = toPos.u - fromPos.u;
+        // const deltaV: number = toPos.v - fromPos.v;
+        // if (deltaU !== 0 && deltaV !== 0 && deltaU / deltaV !== -1) return false;
+
+        // check that all spaces jumped over are occupied
+        // TODO
+        return true;
+    }
+
+    private checkQueenBeeMove(fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
+        return this.adjCoords(fromPos).some(p => this.equalPos(p, toPos));
     }
 
     private checkMove(fromPos: LatticeCoords, toPos: LatticeCoords): MovementOutcome {
         // reject if no piece is at given position
-        if (this.getPos(fromPos) === null) return "ErrNoPieceFound";
-        const piece: Piece = this.getPos(fromPos) as Piece;
+        if (this.getFromPos(fromPos) === null) return "ErrNoPieceFound";
+        const piece: Piece = this.getFromPos(fromPos) as Piece;
+
+        // reject if destination coincides with origin
+        if (this.equalPos(fromPos, toPos)) return "ErrAlreadyThere";
+
+        // reject if destination already contains piece (except for beetles)
+        if (this.getFromPos(toPos) !== null && piece.type !== "Beetle") return "ErrDestinationOccupied";
 
         // reject if out-of-turn
         if (this.currTurnColor !== piece.color) return "ErrOutOfTurn";
 
-        // reject if queen has yet to be played
-        if (this.playerInventories[piece.color].QueenBee === 1) return "ErrQueenNotPlaced";
+        // reject if queen is unplayed
+        if (this.playerInventories[piece.color].QueenBee === 1) return "ErrQueenUnplayed";
 
         // reject if move defies piece-specific movement rules
-        // TODO
-        if (false) {
-            return "ErrViolatesPieceMovement";
+        let validPieceMovement: boolean;
+        switch (piece.type) {
+            case "Ant":
+                validPieceMovement = true; // TODO
+                break;
+            case "Beetle":
+                validPieceMovement = true; // TODO
+                break;
+            case "Grasshopper":
+                validPieceMovement = this.checkGrasshopperMove(fromPos, toPos);
+                break;
+            case "Ladybug":
+                validPieceMovement = true; // TODO
+                break;
+            case "Mosquito":
+                validPieceMovement = true; // TODO
+                break;
+            case "Pillbug":
+                validPieceMovement = true; // TODO
+                break;
+            case "QueenBee":
+                validPieceMovement = this.checkQueenBeeMove(fromPos, toPos);
+                break;
+            case "Spider":
+                validPieceMovement = true; // TODO
+                break;
         }
+        if (!validPieceMovement) return `ErrViolates${piece.type}Movement`;
 
         // reject if violates freedom-to-move rule
-        // TODO
-        if (false) {
-            return "ErrFreedomToMoveRule";
-        }
+        if (!this.checkFreedomToMove(fromPos, toPos)) return "ErrFreedomToMoveRule";
 
         // reject if violates one-hive rule
         if (!this.checkOneHive(fromPos, toPos)) return "ErrOneHiveRule";
@@ -184,11 +234,20 @@ export default class HiveGame {
     public movePiece(fromPos: LatticeCoords, toPos: LatticeCoords): MovementOutcome {
         const outcome: MovementOutcome = this.checkMove(fromPos, toPos);
         if (outcome === "Success") {
-            const piece: Piece = this.getPos(fromPos) as Piece;
-            this.setPos(fromPos, null);
-            this.setPos(toPos, piece);
+            const piece: Piece = this.getFromPos(fromPos) as Piece;
+            this.setAtPos(fromPos, null);
+            this.setAtPos(toPos, piece);
             this.advanceTurn();
         }
         return outcome;
+    }
+
+    public checkGameStatus(): GameStatus {
+        if (this.queenPos.Black === null || this.queenPos.White === null) return "Ongoing";
+        const blackSurrounded: boolean = this.adjPieceCoords(this.queenPos.Black).length === 6;
+        const whiteSurrounded: boolean = this.adjPieceCoords(this.queenPos.White).length === 6;
+        if (blackSurrounded && whiteSurrounded) return "Draw";
+        if (blackSurrounded) return "WhiteWin";
+        return "BlackWin";
     }
 }

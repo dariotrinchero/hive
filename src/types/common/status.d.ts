@@ -1,14 +1,22 @@
-export type TurnOutcome = "Success" | "ErrOutOfTurn";
+import { PieceType } from "@/types/common/piece";
 
-export type PlacementOutcome = TurnOutcome
-    | "ErrDisconnected"
+type CommonOutcome = "Success" 
+    | "ErrOutOfTurn"
+    | "ErrDestinationOccupied"
+    | "ErrOneHiveRule";
+
+type PieceMovementError = `ErrViolates${PieceType}Movement`;
+
+export type PlacementOutcome = CommonOutcome
     | "ErrMustBeQueen"
     | "ErrTouchesOppColor"
     | "ErrOutOfPieces";
 
-export type MovementOutcome = TurnOutcome
-    | "ErrQueenNotPlaced"
-    | "ErrOneHiveRule"
+export type MovementOutcome = CommonOutcome
+    | PieceMovementError
+    | "ErrQueenUnplayed"
     | "ErrFreedomToMoveRule"
-    | "ErrViolatesPieceMovement"
-    | "ErrNoPieceFound";
+    | "ErrNoPieceFound"
+    | "ErrAlreadyThere";
+
+export type GameStatus = "Ongoing" | "BlackWin" | "WhiteWin" | "Draw";
