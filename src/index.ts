@@ -10,4 +10,4 @@ board.placeTile(1, 1, "wP");
 board.placeTile(0, -1, "bQ");
 board.placeTile(2, -1, "wQ");
 board.placeTile(-1, 2, "bS");
-board.spawnPlaceholder(0, 2);
+board.spawnPlaceholder({ u: 0, v: 2 });

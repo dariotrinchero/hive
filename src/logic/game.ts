@@ -1,9 +1,9 @@
-import { GameStatus, MovementOutcome, PlacementOutcome } from "@/types/common/status";
+import { MovementError, MovementErrorMsg, MovementSuccess, PlacementError, PlacementErrorMsg, PlacementSuccess } from "@/types/common/turn";
+import { GameStatus, Inventory, PiecePositions, PieceSpace, PlacementCount, PlayerInventories, PlayerPiecePositions } from "@/types/logic/game";
 import { Piece, PieceColor } from "@/types/common/piece";
-import { LatticeCoords } from "@/types/common/piece";
-import { Inventory, PieceSpace, PlayerInventories, PlacementCount, PlayerPiecePositions } from "@/types/logic/game";
-import GraphUtils from "./graph";
 import { BFSResults } from "@/types/logic/graph";
+import GraphUtils from "@/logic/graph";
+import { LatticeCoords } from "@/types/common/piece";
 
 export enum Players {
     "Black",
@@ -51,14 +51,14 @@ export default class HiveGame {
         const playSpaceSize: number = 2 * Object.values(HiveGame.startingInventory)
             .reduce((a, b) => a + b, 0) + 2;
         this.playArea = new Array<Array<PieceSpace>>(playSpaceSize);
-        for (var i = 0; i < playSpaceSize; i++) {
+        for (let i = 0; i < playSpaceSize; i++) {
             this.playArea[i] = new Array<PieceSpace>(playSpaceSize).fill(null);
         }
 
         const piecePositionsEntries = Object.keys(Bugs).map(bug => [bug, []]);
         this.piecePositions = {
-            Black: Object.fromEntries(piecePositionsEntries),
-            White: Object.fromEntries(piecePositionsEntries)
+            Black: Object.fromEntries(piecePositionsEntries) as PiecePositions,
+            White: Object.fromEntries(piecePositionsEntries) as PiecePositions
         };
         this.playerInventories = {
             Black: { ...HiveGame.startingInventory },
@@ -87,7 +87,7 @@ export default class HiveGame {
         return { u: m(pos.u), v: m(pos.v) };
     }
 
-    private equalPos(pos1: LatticeCoords, pos2: LatticeCoords) {
+    public equalPos(pos1: LatticeCoords, pos2: LatticeCoords) {
         pos1 = this.mod(pos1);
         pos2 = this.mod(pos2);
         return pos1.u === pos2.u && pos1.v === pos2.v;
@@ -111,15 +111,15 @@ export default class HiveGame {
         this.gameStatus = this.checkGameStatus();
     }
 
-    private checkSpawn(u: number, v: number, piece: Piece): PlacementOutcome {
+    private checkPlacement(pos: LatticeCoords, piece: Piece): "Success" | PlacementErrorMsg {
         // always accept first placement
         if (this.turnCount === 0) return "Success";
 
         // basic immediate rejections
         if (this.currTurnColor !== piece.color) return "ErrOutOfTurn";
-        if (this.getFromPos({ u, v }) !== null) return "ErrDestinationOccupied";
+        if (this.getFromPos(pos) !== null) return "ErrDestinationOccupied";
         if (this.playerInventories[piece.color][piece.type] <= 0) return "ErrOutOfPieces";
-        if (this.adjPieceCoords({ u, v }).length === 0) return "ErrOneHiveRule";
+        if (this.adjPieceCoords(pos).length === 0) return "ErrOneHiveRule";
 
         // reject if 4th placement is anything but queen (if unplayed)
         if (this.placementCount[piece.color] === 3 && this.playerInventories[piece.color].QueenBee === 1
@@ -129,25 +129,33 @@ export default class HiveGame {
 
         // reject if touching opposing color (after second placement)
         if (this.placementCount[piece.color] > 0
-            && this.adjPieces({ u, v }).some(p => p.color !== piece.color)) {
+            && this.adjPieces(pos).some(p => p.color !== piece.color)) {
             return "ErrTouchesOppColor";
         }
         return "Success";
     }
 
-    public spawnPiece(u: number, v: number, piece: Piece): PlacementOutcome {
-        const outcome: PlacementOutcome = this.checkSpawn(u, v, piece);
-        if (outcome === "Success") {
-            if (this.turnCount === 0) this.currTurnColor = piece.color;
-            const positions = this.piecePositions[piece.color][piece.type];
-            positions.push({ u, v });
-            piece.index = positions.length;
-            this.setAtPos({ u, v }, piece);
-            this.placementCount[piece.color] += 1;
-            this.playerInventories[piece.color][piece.type] -= 1;
-            this.advanceTurn();
-        }
-        return outcome;
+    public placePiece(pos: LatticeCoords, piece: Piece): PlacementSuccess | PlacementError {
+        const checkOutcome = this.checkPlacement(pos, piece);
+        if (checkOutcome !== "Success") return {
+            message: checkOutcome,
+            outcome: "Error",
+            turnType: "Placement"
+        };
+
+        // spawn piece
+        const positions = this.piecePositions[piece.color][piece.type];
+        positions.push(pos);
+        piece.index = positions.length;
+        this.setAtPos(pos, piece);
+
+        // advance turn
+        if (this.turnCount === 0) this.currTurnColor = piece.color;
+        this.placementCount[piece.color] += 1;
+        this.playerInventories[piece.color][piece.type] -= 1;
+        this.advanceTurn();
+
+        return { outcome: "Success", piece, pos, turnType: "Placement" };
     }
 
     private checkOneHive(fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
@@ -161,8 +169,8 @@ export default class HiveGame {
         // TODO
 
         // accept if all adjacent pieces already connect with each other
-        let lastSeenSpace: boolean = true;
-        let groupsSeen: number = 0;
+        let lastSeenSpace = true;
+        let groupsSeen = 0;
         const adjacent: LatticeCoords[] = this.adjCoords(fromPos);
         adjacent.forEach(pos => {
             if (this.getFromPos(pos) !== null) {
@@ -199,24 +207,17 @@ export default class HiveGame {
         return this.adjCoords(fromPos).some(p => this.equalPos(p, toPos));
     }
 
-    private checkMove(fromPos: LatticeCoords, toPos: LatticeCoords): MovementOutcome {
-        // reject if no piece is at given position
-        if (this.getFromPos(fromPos) === null) return "ErrNoPieceFound";
-        const piece: Piece = this.getFromPos(fromPos) as Piece;
+    private checkMove(fromPos: LatticeCoords, toPos: LatticeCoords): "Success" | MovementErrorMsg {
+        const piece = this.getFromPos(fromPos);
 
-        // reject if destination coincides with origin
+        // basic immediate rejections
+        if (piece === null) return "ErrNoPieceFound";
         if (this.equalPos(fromPos, toPos)) return "ErrAlreadyThere";
-
-        // reject if destination already contains piece (except for beetles)
         if (this.getFromPos(toPos) !== null && piece.type !== "Beetle") return "ErrDestinationOccupied";
-
-        // reject if out-of-turn
         if (this.currTurnColor !== piece.color) return "ErrOutOfTurn";
-
-        // reject if queen is unplayed
         if (this.playerInventories[piece.color].QueenBee === 1) return "ErrQueenUnplayed";
 
-        // reject if move defies piece-specific movement rules
+        // piece-specific movement rules
         let validPieceMovement: boolean;
         switch (piece.type) {
             case "Ant":
@@ -246,27 +247,40 @@ export default class HiveGame {
         }
         if (!validPieceMovement) return `ErrViolates${piece.type}Movement`;
 
-        // reject if violates freedom-to-move rule
+        // freedom-to-move & one-hive rules
         if (!this.checkFreedomToMove(fromPos, toPos)) return "ErrFreedomToMoveRule";
-
-        // reject if violates one-hive rule
         if (!this.checkOneHive(fromPos, toPos)) return "ErrOneHiveRule";
 
         return "Success";
     }
 
-    public movePiece(fromPos: LatticeCoords, toPos: LatticeCoords): MovementOutcome {
-        const outcome: MovementOutcome = this.checkMove(fromPos, toPos);
-        if (outcome === "Success") {
-            const piece: Piece = this.getFromPos(fromPos) as Piece;
-            const positions = this.piecePositions[piece.color][piece.type];
-            positions[piece.index || positions.length - 1] = toPos;
-            this.setAtPos(fromPos, null);
-            this.setAtPos(toPos, piece);
-            this.advanceTurn();
-        }
-        return outcome;
+    public movePiece(fromPos: LatticeCoords, toPos: LatticeCoords): MovementSuccess | MovementError {
+        const checkOutcome = this.checkMove(fromPos, toPos);
+        if (checkOutcome !== "Success") return {
+            message: checkOutcome,
+            outcome: "Error",
+            turnType: "Movement"
+        };
+
+        const piece: Piece = this.getFromPos(fromPos) as Piece;
+        const positions = this.piecePositions[piece.color][piece.type];
+        positions[piece.index || positions.length - 1] = toPos;
+        this.setAtPos(fromPos, null);
+        this.setAtPos(toPos, piece);
+        this.advanceTurn();
+
+        return { fromPos, outcome: "Success", piece, toPos, turnType: "Movement" };
     }
+
+    // public makeMove(move: TurnRequest): TurnOutcome {
+    //     if (move === "Pass") {
+    //         this.advanceTurn();
+    //         return "Passed";
+    //     }
+
+    //     // TODO
+    //     return "PlacementSuccess";
+    // }
 
     public checkGameStatus(): GameStatus {
         const blackBeePos: LatticeCoords[] = this.piecePositions.Black.QueenBee;

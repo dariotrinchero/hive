@@ -1,10 +1,11 @@
 import * as d3 from "d3";
 import { LatticeCoords, Piece, PieceColor, PieceType } from "@/types/common/piece";
-import { MovementOutcome, PlacementOutcome, TurnOutcome } from "@/types/common/status";
+import { TurnRequest } from "@/types/common/turn";
+import { MovementErrorMsg, PlacementErrorMsg, TurnOutcome } from "@/types/common/turn";
 import { PieceTile, ScreenCoords, SVGContainer, Tile } from "@/types/components/board";
+
 import HiveGame from "@/logic/game";
-import Notation from "@/logic/notation";
-import { Move, ParseError } from "@/types/logic/notation";
+import Notation, { ParseError } from "@/logic/notation";
 // import icons from "@/ui/icons.svg";
 
 export default class Board {
@@ -39,9 +40,9 @@ export default class Board {
     };
     private static uiColors: { [element: string]: string; } = {
         hover: "#e50bbd99",
-        selected: "#b80fc7",
         placeholder: "#e50bbd55",
-        placeholderHover: "#e50bbd33"
+        placeholderHover: "#e50bbd33",
+        selected: "#b80fc7"
     };
 
     // user-defined dimensions
@@ -55,7 +56,7 @@ export default class Board {
     private hexPath: d3.Path;
 
     // selection tracking
-    private selectedTile?: PieceTile;
+    private selectedTile: PieceTile | null;
     private placeholders: Tile[] = [];
 
     public constructor(width: number, height: number, hexRad: number, cornerRad: number, hexRadGap: number) {
@@ -71,6 +72,7 @@ export default class Board {
         this.horSpacing = Math.sqrt(3) * this.gappedHexRad;
         this.vertSpacing = 1.5 * this.gappedHexRad;
         this.hexPath = Board.getRoundedHexPath(hexRad, cornerRad);
+        this.selectedTile = null;
 
         // TODO: Find a good way of adding SVG defs to index.html in this constructor
         // d3.xml(icons).then(data => {
@@ -100,34 +102,27 @@ export default class Board {
         return path;
     }
 
-    public placeTile(u: number, v: number, pieceStr: string): PlacementOutcome | ParseError {
+    public placeTile(u: number, v: number, pieceStr: string): "Success" | PlacementErrorMsg | ParseError {
         const piece: Piece | ParseError = Notation.stringToPiece(pieceStr);
         if (piece === "ParseError") return "ParseError";
-        return this.spawnTile(u, v, piece);
+        return this.spawnTile({ u, v }, piece);
     }
 
     public makeMove(moveStr: string): TurnOutcome | ParseError {
-        const move: Move | ParseError = Notation.stringToMove(moveStr);
+        const move: TurnRequest | ParseError = Notation.stringToMove(moveStr);
         if (move === "ParseError") return "ParseError";
 
         // TODO find destination coords and place
-        return "Success";
+        return "ParseError";
     }
 
-    /**
-     * Spawn tile at given coordinates corresponding to given Piece.
-     * 
-     * @param u TODO
-     * @param v TODO
-     * @param piece piece represented by tile
-     * @returns TODO
-     */
-    private spawnTile(u: number, v: number, piece: Piece): PlacementOutcome {
+    private spawnTile(pos: LatticeCoords, piece: Piece): "Success" | PlacementErrorMsg {
         // ask game to spawn piece & exit if illegal
-        const outcome: PlacementOutcome = Board.game.spawnPiece(u, v, piece);
+        const placement = Board.game.placePiece(pos, piece);
+        if (placement.outcome !== "Success") return placement.message;
 
-        // spawn piece
-        const { x, y } = this.convertCoordinates({ u, v });
+        // spawn tile
+        const { x, y } = this.convertCoordinates(pos);
         const tileHandle = Board.svgContainer
             .append("g")
             .attr("transform", `translate(${x},${y})`);
@@ -145,12 +140,12 @@ export default class Board {
             if (!this.selectedTile) hex.style("stroke", "none");
         });
         tileHandle.on("click", () => {
-            if (!this.selectedTile) {
-                this.selectedTile = { pos: { u, v }, piece, tileHandle };
+            if (this.selectedTile === null) {
+                this.selectedTile = { piece, pos, tileHandle };
                 hex.style("stroke", Board.uiColors.selected);
-            } else if (this.selectedTile.pos.u === u && this.selectedTile.pos.v === v) {
+            } else if (Board.game.equalPos(this.selectedTile.pos, pos)) {
                 hex.style("stroke", Board.uiColors.hover);
-                this.selectedTile = undefined;
+                this.selectedTile = null;
             }
         });
 
@@ -169,19 +164,12 @@ export default class Board {
             console.error("Cannot determine bug icon bounding box.");
         }
 
-        return outcome;
+        return "Success";
     }
 
-    /**
-     * Spawn placeholder at given coordinates to represent placement location.
-     * 
-     * @param u TODO
-     * @param v TODO
-     * @returns TODO
-     */
-    public spawnPlaceholder(u: number, v: number): Tile {
+    public spawnPlaceholder(pos: LatticeCoords): Tile {
         // spawn placeholder
-        const { x, y } = this.convertCoordinates({ u, v });
+        const { x, y } = this.convertCoordinates(pos);
         const tileHandle = Board.svgContainer
             .append("g")
             .style("stroke", Board.uiColors.placeholder)
@@ -200,25 +188,24 @@ export default class Board {
         tileHandle.on("mouseenter", () => tileHandle.style("fill", Board.uiColors.placeholderHover));
         tileHandle.on("mouseleave", () => tileHandle.style("fill", "#ffffff00"));
         tileHandle.on("click", () => {
-            if (typeof this.selectedTile === "undefined") {
+            if (this.selectedTile === null) {
                 console.error("Placeholder clicked with no selected tile.");
             } else {
-                this.moveTile(this.selectedTile, { u, v });
+                this.moveTile(this.selectedTile, pos);
                 this.selectedTile.tileHandle.selectChild("path").style("stroke", "none");
-                this.selectedTile = undefined;
+                this.selectedTile = null;
             }
         });
 
-        const tile: Tile = { pos: { u, v }, tileHandle };
+        const tile: Tile = { pos, tileHandle };
         this.placeholders.push(tile);
         return tile;
     }
 
-    private moveTile(tile: PieceTile, toPos: LatticeCoords): MovementOutcome {
+    private moveTile(tile: PieceTile, toPos: LatticeCoords): "Success" | MovementErrorMsg {
         // ask game to move piece & exit if illegal
-        const outcome: MovementOutcome = Board.game.movePiece(tile.pos, toPos);
-        console.log(outcome);
-        if (outcome !== "Success") return outcome;
+        const movement = Board.game.movePiece(tile.pos, toPos);
+        if (movement.outcome !== "Success") return movement.message;
 
         // move tile
         const { x, y } = this.convertCoordinates(toPos);
@@ -241,6 +228,7 @@ export default class Board {
      * @returns position of tile in SVG rectilinear coordinates
      */
     private convertCoordinates(pos: LatticeCoords): ScreenCoords {
+        // TODO let LatticeCoords be on torus, and hence add relevant offsets here
         return {
             x: this.horSpacing * (pos.u + pos.v / 2) + 1.5 * this.horSpacing,
             y: this.vertSpacing * pos.v + 2.5 * this.gappedHexRad

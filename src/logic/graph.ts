@@ -2,11 +2,11 @@ import { BFSResults } from "@/types/logic/graph";
 
 export default class GraphUtils {
     public static bfs<V>(source: V, adj: (vertex: V) => V[]): BFSResults<V> {
-        const edgeTo: { [edge: string]: V } = {};
-        const marked: { [edge: string]: boolean } = {};
+        const edgeTo: { [edge: string]: V; } = {};
+        const marked: { [edge: string]: boolean; } = {};
         const queue: V[] = [];
-        
-        let connectedCount: number = 0;
+
+        let connectedCount = 0;
         marked[JSON.stringify(source)] = true;
         queue.push(source);
         while (queue.length > 0) {
@@ -21,6 +21,6 @@ export default class GraphUtils {
             });
         }
 
-        return { source, edgeTo, marked, connectedCount };
+        return { connectedCount, edgeTo, marked, source };
     }
 }

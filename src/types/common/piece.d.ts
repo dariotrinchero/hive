@@ -1,4 +1,4 @@
-import { Players, Bugs } from "@/logic/game";
+import { Bugs, Players  } from "@/logic/game";
 
 export type PieceColor = keyof typeof Players;
 

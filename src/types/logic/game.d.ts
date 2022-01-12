@@ -9,3 +9,5 @@ export type PlacementCount = Record<PieceColor, number>;
 
 export type PiecePositions = Record<PieceType, LatticeCoords[]>;
 export type PlayerPiecePositions = Record<PieceColor, PiecePositions>;
+
+export type GameStatus = "Ongoing" | "BlackWin" | "WhiteWin" | "Draw";

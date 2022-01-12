@@ -1,0 +1,9 @@
+# directories
+node_modules
+dist
+test
+
+# config files
+.eslintrc.js
+jest.config.js
+webpack.config.js

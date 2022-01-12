@@ -1,3 +1,5 @@
+import { LatticeCoords  } from "@/types/common/piece";
+
 export type SVGContainer = d3.Selection<d3.BaseType, unknown, HTMLElement, unknown>;
 
 export interface ScreenCoords {
