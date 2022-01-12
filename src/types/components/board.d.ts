@@ -1,4 +1,4 @@
-import { LatticeCoords  } from "@/types/common/piece";
+import { LatticeCoords, Piece } from "@/types/common/piece";
 
 export type SVGContainer = d3.Selection<d3.BaseType, unknown, HTMLElement, unknown>;
 
@@ -7,13 +7,13 @@ export interface ScreenCoords {
     y: number;
 }
 
-type SVGGroup = d3.Selection<SVGGElement, unknown, HTMLElement, unknown>;
+type GroupHandle = d3.Selection<SVGGElement, unknown, HTMLElement, unknown>;
 
-export interface Tile {
-    tileHandle: SVGGroup;
-    pos: LatticeCoords;
+export interface TilePos extends LatticeCoords {
+    handle: GroupHandle;
 }
 
-export interface PieceTile extends Tile {
+export type SelectedPiece = null | {
+    tilePos: TilePos;
     piece: Piece;
 }

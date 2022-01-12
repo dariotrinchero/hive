@@ -7,7 +7,7 @@ export type PlayerInventories = Record<PieceColor, Inventory>;
 
 export type PlacementCount = Record<PieceColor, number>;
 
-export type PiecePositions = Record<PieceType, LatticeCoords[]>;
-export type PlayerPiecePositions = Record<PieceColor, PiecePositions>;
+export type PiecePositions<T extends LatticeCoords> = Record<PieceType, T[]>;
+export type PlayerPiecePositions<T> = Record<PieceColor, PiecePositions<T>>;
 
 export type GameStatus = "Ongoing" | "BlackWin" | "WhiteWin" | "Draw";

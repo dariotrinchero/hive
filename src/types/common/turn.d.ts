@@ -1,4 +1,4 @@
-import { LatticeCoords, Piece, PieceType } from "@/types/common/piece";
+import { Piece, PieceType } from "@/types/common/piece";
 import { PlanarDirection } from "@/logic/notation";
 
 // Turn request types:
@@ -9,15 +9,19 @@ export type MoveDestination = "Anywhere" | {
     direction: Direction;
 };
 
-export type TurnRequest = "Pass" | {
-    movingPiece: Piece;
+interface GenericMove {
+    piece: Piece;
     destination: MoveDestination;
-};
+}
+
+export type TurnRequest = "Pass" | GenericMove;
 
 // Turn error message types:
 type CommonErrorMsg = "ErrOutOfTurn"
+    | "ErrGameOver"
     | "ErrDestinationOccupied"
-    | "ErrOneHiveRule";
+    | "ErrOneHiveRule"
+    | "ErrInvalidDestination";
 
 export type PlacementErrorMsg = CommonErrorMsg
     | "ErrMustBeQueen"
@@ -30,7 +34,7 @@ export type MovementErrorMsg = CommonErrorMsg
     | PieceMovementErrorMsg
     | "ErrQueenUnplayed"
     | "ErrFreedomToMoveRule"
-    | "ErrNoPieceFound"
+    | "ErrInvalidMovingPiece"
     | "ErrAlreadyThere";
 
 // Turn outcome discriminated union types
@@ -42,31 +46,26 @@ interface MovementOutcome {
     turnType: "Movement";
 }
 
-export interface PlacementSuccess extends PlacementOutcome {
-    outcome: "Success";
-    piece: Piece;
-    pos: LatticeCoords;
+export interface PlacementSuccess extends PlacementOutcome, GenericMove {
+    status: "Success";
 }
 
-export interface MovementSuccess extends MovementOutcome {
-    outcome: "Success";
-    piece: Piece;
-    fromPos: LatticeCoords;
-    toPos: LatticeCoords;
+export interface MovementSuccess extends MovementOutcome, GenericMove {
+    status: "Success";
 }
 
 export interface PassSuccess {
     turnType: "Pass";
-    outcome: "Success";
+    status: "Success";
 }
 
 export interface PlacementError extends PlacementOutcome {
-    outcome: "Error";
+    status: "Error";
     message: PlacementErrorMsg;
 }
 
 export interface MovementError extends MovementOutcome {
-    outcome: "Error";
+    status: "Error";
     message: MovementErrorMsg;
 }
 

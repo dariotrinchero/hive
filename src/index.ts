@@ -1,13 +1,15 @@
 import Board from "@/components/board";
 
-const board = new Board(1500, 800, 90, 15, 5);
-board.placeTile(0, 0, "bA");
-board.placeTile(1, 0, "wG");
-board.placeTile(-1, 1, "bB");
-board.placeTile(2, 0, "wL");
-board.placeTile(-1, 0, "bM");
-board.placeTile(1, 1, "wP");
-board.placeTile(0, -1, "bQ");
-board.placeTile(2, -1, "wQ");
-board.placeTile(-1, 2, "bS");
-board.spawnPlaceholder({ u: 0, v: 2 });
+const hexRad = 90;
+const board = new Board(1600, 900, hexRad, hexRad / 6, hexRad / 18);
+board.processTurn("bA .");
+board.processTurn("wG bA1-");
+board.processTurn("bB /bA1");
+board.processTurn("wL wG1-");
+board.processTurn("bM -bA1");
+board.processTurn("wP wG1\\");
+board.processTurn("bQ \\bA1");
+board.processTurn("wQ wG1/");
+board.processTurn("bS bB1\\");
+// board.processTurn("wL1 bS1-"); // move
+board.spawnPlaceholder({ direction: "o-", referencePiece: { color: "Black", index: 1, type: "Spider" } });

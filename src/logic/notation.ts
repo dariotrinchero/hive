@@ -55,18 +55,18 @@ export default class Notation {
         return prefix;
     }
 
-    public static stringToMove(notation: string): TurnRequest | ParseError {
+    public static stringToTurnRequest(notation: string): TurnRequest | ParseError {
         // special pass move
         if (notation.toLowerCase() === "pass") return "Pass";
 
         // get moving piece
         const split: string[] = notation.split(" ");
-        if (split.length > 2) return "ParseError";
+        if (split.length !== 2) return "ParseError";
         const movingPiece: Piece | ParseError = Notation.stringToPiece(split[0]);
         if (movingPiece === "ParseError") return "ParseError";
 
         // special notation for first move
-        if (split[1] === ".") return { destination: "Anywhere", movingPiece };
+        if (split[1] === ".") return { destination: "Anywhere", piece: movingPiece };
 
         const matches = split[1].match(/^([/\\-])?(\w+)([/\\-])?$/i);
         if (!matches || matches[1] && matches[3]) return "ParseError";
@@ -82,19 +82,19 @@ export default class Notation {
 
         return {
             destination: { direction, referencePiece },
-            movingPiece
+            piece: movingPiece
         };
     }
 
-    public static moveToString(move: TurnRequest): string {
-        if (move === "Pass") return "pass";
+    public static turnRequestToString(turn: TurnRequest): string {
+        if (turn === "Pass") return "pass";
         let destination = ".";
-        if (move.destination !== "Anywhere") {
-            destination = Notation.pieceToString(move.destination.referencePiece);
-            if (move.destination.direction !== "Above") {
-                destination = move.destination.direction.replace("o", destination);
+        if (turn.destination !== "Anywhere") {
+            destination = Notation.pieceToString(turn.destination.referencePiece);
+            if (turn.destination.direction !== "Above") {
+                destination = turn.destination.direction.replace("o", destination);
             }
         }
-        return `${Notation.pieceToString(move.movingPiece)} ${destination}`;
+        return `${Notation.pieceToString(turn.piece)} ${destination}`;
     }
 }
