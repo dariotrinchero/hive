@@ -15,9 +15,6 @@ import { LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
 // import icons from "@/ui/icons.svg";
 
 export default class Board extends HexGrid<TilePos> {
-    private static svgContainer: SVGContainer;
-    private static game: HiveGame;
-
     // static lookup-tables
     private static tileColorMap: { [color in PieceColor]: string } = {
         Black: "#363430",
@@ -51,6 +48,8 @@ export default class Board extends HexGrid<TilePos> {
         selected: "#b80fc7"
     };
 
+    private game: HiveGame;
+
     // user-defined dimensions
     private width: number;
     private height: number;
@@ -63,25 +62,34 @@ export default class Board extends HexGrid<TilePos> {
     private vertSpacing: number;
     private hexPath: d3.Path;
 
-    // selection tracking
+    // SVG element handles
+    private tileGroup: GroupHandle;
     private selectedTile: SelectedPiece;
     private placeholders: GroupHandle[] = [];
 
+    // pan & zoom tracking
+    private pan: ScreenCoords;
+    private dragging: boolean;
+    private zoom: number;
+
     public constructor(width: number, height: number, hexRad: number, cornerRad: number, hexRadGap: number) {
         super({ u: 0, v: 0 });
+        this.game = new HiveGame();
 
-        Board.svgContainer = d3
+        const svgContainer = d3
             .select("svg")
             .attr("style", `outline: thin solid ${Board.uiColors.placeholder};`)
             .attr("width", width)
             .attr("height", height);
-        Board.game = new HiveGame();
+        this.tileGroup = svgContainer.append("g");
 
+        // user-defined dimensions
         this.width = width;
         this.height = height;
         this.hexRadius = hexRad;
         this.hexRadGap = hexRadGap;
 
+        // precalculated quantities
         this.gappedHexRad = hexRad + hexRadGap;
         this.horSpacing = Math.sqrt(3) * this.gappedHexRad;
         this.vertSpacing = 1.5 * this.gappedHexRad;
@@ -89,11 +97,51 @@ export default class Board extends HexGrid<TilePos> {
 
         this.selectedTile = null;
 
+        // pan & zoom tracking
+        this.pan = { x: 0, y: 0 };
+        this.dragging = false;
+        this.zoom = 1;
+        this.bindPanAndZoom(svgContainer);
+
         // TODO: Find a good way of adding SVG defs to index.html in this constructor
         // d3.xml(icons).then(data => {
         //     const svg = document.body.getElementsByTagName("svg")[0];
         //     svg.insertBefore(data.documentElement.children[0], svg.firstChild);
         // }).catch(error => throw new Error(`Unable to initialize board UI due to error: ${error}`));
+    }
+
+    private bindPanAndZoom(svgContainer: SVGContainer) {
+        svgContainer.on("mousedown", (e: MouseEvent) => {
+            if (e.button === 1) this.dragging = true;
+        });
+
+        svgContainer.on("mouseup", (e: MouseEvent) => {
+            if (e.button === 1) this.dragging = false;
+        });
+
+        svgContainer.on("mouseleave", () => this.dragging = false);
+
+        svgContainer.on("mousemove", (e: MouseEvent) => {
+            if (this.dragging) {
+                this.pan.x += e.movementX;
+                this.pan.y += e.movementY;
+                this.tileGroup.attr("transform", `translate(${this.pan.x},${this.pan.y})scale(${this.zoom})`);
+            }
+        });
+
+        svgContainer.on("wheel", (e: WheelEvent) => {
+            e.preventDefault();
+
+            let nextZoom = this.zoom + e.deltaY * -0.0005;
+            nextZoom = Math.min(Math.max(0.25, nextZoom), 2); // limit zoom between 0.25 and 2
+            const ratio = 1 - nextZoom / this.zoom;
+
+            this.zoom = nextZoom;
+            this.pan.x += (e.clientX - this.pan.x) * ratio;
+            this.pan.y += (e.clientY - this.pan.y) * ratio;
+            this.tileGroup.attr("transform", `translate(${this.pan.x},${this.pan.y})scale(${this.zoom})`);
+        });
+
     }
 
     private static getRoundedHexPath(hexRad: number, cornerRad: number): d3.Path {
@@ -126,7 +174,7 @@ export default class Board extends HexGrid<TilePos> {
             if (turn === "ParseError") return "ParseError";
         } else turn = turnOrNotation;
 
-        const outcome: TurnOutcome = Board.game.processTurn(turn);
+        const outcome: TurnOutcome = this.game.processTurn(turn);
         if (outcome.status === "Success") {
             if (outcome.turnType === "Placement") this.spawnTile(outcome.piece, outcome.destination);
             else if (outcome.turnType === "Movement") this.moveTile(outcome.piece, outcome.destination);
@@ -143,7 +191,7 @@ export default class Board extends HexGrid<TilePos> {
 
         // spawn tile
         const { x, y } = this.convertCoordinates(pos);
-        const handle = Board.svgContainer
+        const handle = this.tileGroup
             .append("g")
             .attr("transform", `translate(${x},${y})`);
         const hex = handle
@@ -196,7 +244,7 @@ export default class Board extends HexGrid<TilePos> {
 
         // spawn placeholder
         const { x, y } = this.convertCoordinates(pos);
-        const handle = Board.svgContainer
+        const handle = this.tileGroup
             .append("g")
             .style("stroke", Board.uiColors.placeholder)
             .style("stroke-width", `${0.6 * this.hexRadGap}px`)
