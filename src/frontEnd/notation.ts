@@ -1,18 +1,11 @@
-import { Direction, TurnRequest } from "@/types/common/turn";
-import HiveGame, { Bugs, Players } from "@/logic/game";
 import { Piece, PieceColor, PieceType } from "@/types/common/piece";
+import { TurnRequest } from "@/types/common/turn";
+
+import HiveGame, { Bugs, Players } from "@/backEnd/game";
+
+import { Direction } from "@/types/backEnd/hexGrid";
 
 export type ParseError = "ParseError";
-
-export enum PlanarDirection {
-    // anticlockwise around reference (represented 'o') from o-->
-    "o-",
-    "o/",
-    "\\o",
-    "-o",
-    "/o",
-    "o\\"
-}
 
 export default class Notation {
     private static charToPieceType(char: string): PieceType | ParseError {

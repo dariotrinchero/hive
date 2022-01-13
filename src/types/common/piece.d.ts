@@ -1,4 +1,4 @@
-import { Bugs, Players  } from "@/logic/game";
+import { Bugs, Players  } from "@/backEnd/game";
 
 export type PieceColor = keyof typeof Players;
 
@@ -9,9 +9,4 @@ export interface Piece {
     color: PieceColor;
     index?: number;
     covering?: Piece; // for beetles
-}
-
-export interface LatticeCoords {
-    u: number;
-    v: number;
 }

@@ -1,5 +1,4 @@
 import {
-    MoveDestination,
     MovementError,
     MovementErrorMsg,
     MovementSuccess,
@@ -9,19 +8,20 @@ import {
     TurnOutcome,
     TurnRequest
 } from "@/types/common/turn";
+import { Piece, PieceColor } from "@/types/common/piece";
+
+import GraphUtils from "@/backEnd/graph";
+import HexGrid from "@/backEnd/hexGrid";
+
 import {
     GameStatus,
     Inventory,
-    PiecePositions,
     PieceSpace,
     PlacementCount,
-    PlayerInventories,
-    PlayerPiecePositions
-} from "@/types/logic/game";
-import { LatticeCoords, Piece, PieceColor } from "@/types/common/piece";
-import { BFSResults } from "@/types/logic/graph";
-import GraphUtils from "@/logic/graph";
-import { PlanarDirection } from "@/logic/notation";
+    PlayerInventories
+} from "@/types/backEnd/game";
+import { BFSResults } from "@/types/backEnd/graph";
+import { LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
 
 export enum Players {
     "Black",
@@ -39,7 +39,7 @@ export enum Bugs {
     "Spider"
 }
 
-export default class HiveGame {
+export default class HiveGame extends HexGrid<LatticeCoords> {
     public static startingInventory: Inventory = {
         Ant: 3,
         Beetle: 2,
@@ -50,13 +50,8 @@ export default class HiveGame {
         QueenBee: 1,
         Spider: 2
     };
-    private static adjacencies = [
-        // anticlockwise around reference from o-->
-        [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]
-    ] as const;
 
     private playArea: PieceSpace[][];
-    private piecePositions: PlayerPiecePositions<LatticeCoords>;
 
     private playerInventories: PlayerInventories;
     private placementCount: PlacementCount;
@@ -66,6 +61,8 @@ export default class HiveGame {
     private gameStatus: GameStatus;
 
     public constructor() {
+        super({ u: 0, v: 0 }); // TODO change for midpoint
+
         const playSpaceSize: number = 2 * Object.values(HiveGame.startingInventory)
             .reduce((a, b) => a + b, 0) + 2;
         this.playArea = new Array<Array<PieceSpace>>(playSpaceSize);
@@ -73,13 +70,6 @@ export default class HiveGame {
             this.playArea[i] = new Array<PieceSpace>(playSpaceSize).fill(null);
         }
 
-        const startingPositions = () => Object.fromEntries(
-            Object.keys(Bugs).map(bug => [bug, new Array<LatticeCoords>()])
-        ) as PiecePositions<LatticeCoords>;
-        this.piecePositions = {
-            Black: startingPositions(),
-            White: startingPositions()
-        };
         this.playerInventories = {
             Black: { ...HiveGame.startingInventory },
             White: { ...HiveGame.startingInventory }
@@ -113,7 +103,7 @@ export default class HiveGame {
         return pos1.u === pos2.u && pos1.v === pos2.v;
     }
 
-    private adjCoords(pos: LatticeCoords): LatticeCoords[] {
+    protected override adjCoords(pos: LatticeCoords): LatticeCoords[] {
         return HiveGame.adjacencies.map(([du, dv]) => this.mod({ u: pos.u + du, v: pos.v + dv }));
     }
 
@@ -129,28 +119,6 @@ export default class HiveGame {
         this.turnCount += 1;
         this.currTurnColor = this.currTurnColor === "Black" ? "White" : "Black";
         this.gameStatus = this.checkGameStatus();
-    }
-
-    private getExistingPiecePos(piece: Piece): LatticeCoords | null {
-        const samePiecePositions = this.piecePositions[piece.color][piece.type];
-        if (!piece.index || samePiecePositions.length < piece.index) return null;
-        return samePiecePositions[piece.index - 1];
-    }
-
-    // unsafe if piece.index does not exist or is too large
-    private setExistingPiecePos(piece: Piece, pos: LatticeCoords): void {
-        const samePiecePositions = this.piecePositions[piece.color][piece.type];
-        samePiecePositions[piece.index as number - 1] = pos;
-    }
-
-    private getDestinationPos(destination: MoveDestination): LatticeCoords | null {
-        if (destination === "Anywhere") return { u: 0, v: 0 }; // TODO change for midpoint
-
-        const refPos = this.getExistingPiecePos(destination.referencePiece);
-        if (!refPos) return null;
-
-        if (destination.direction === "Above") return refPos;
-        else return this.adjCoords(refPos)[PlanarDirection[destination.direction]];
     }
 
     private checkPlacement(piece: Piece, pos: LatticeCoords): "Success" | PlacementErrorMsg {
@@ -177,7 +145,7 @@ export default class HiveGame {
         return "Success";
     }
 
-    public placePiece(piece: Piece, destination: MoveDestination): PlacementSuccess | PlacementError {
+    public placePiece(piece: Piece, destination: RelativePosition): PlacementSuccess | PlacementError {
         const pos = this.getDestinationPos(destination);
         if (!pos) return {
             message: "ErrInvalidDestination",
@@ -286,7 +254,7 @@ export default class HiveGame {
         return "Success";
     }
 
-    public movePiece(piece: Piece, destination: MoveDestination): MovementSuccess | MovementError {
+    public movePiece(piece: Piece, destination: RelativePosition): MovementSuccess | MovementError {
         const fromPos = this.getExistingPiecePos(piece);
         if (!fromPos) return {
             message: "ErrInvalidMovingPiece",

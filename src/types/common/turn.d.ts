@@ -1,22 +1,15 @@
 import { Piece, PieceType } from "@/types/common/piece";
-import { PlanarDirection } from "@/logic/notation";
+import { RelativePosition } from "@/types/backEnd/hexGrid";
 
-// Turn request types:
-export type Direction = keyof typeof PlanarDirection | "Above";
-
-export type MoveDestination = "Anywhere" | {
-    referencePiece: Piece;
-    direction: Direction;
-};
-
+// turn request types
 interface GenericMove {
     piece: Piece;
-    destination: MoveDestination;
+    destination: RelativePosition;
 }
 
 export type TurnRequest = "Pass" | GenericMove;
 
-// Turn error message types:
+// turn error message types
 type CommonErrorMsg = "ErrOutOfTurn"
     | "ErrGameOver"
     | "ErrDestinationOccupied"
@@ -28,16 +21,14 @@ export type PlacementErrorMsg = CommonErrorMsg
     | "ErrTouchesOppColor"
     | "ErrOutOfPieces";
 
-type PieceMovementErrorMsg = `ErrViolates${PieceType}Movement`;
-
 export type MovementErrorMsg = CommonErrorMsg
-    | PieceMovementErrorMsg
+    | `ErrViolates${PieceType}Movement`
     | "ErrQueenUnplayed"
     | "ErrFreedomToMoveRule"
     | "ErrInvalidMovingPiece"
     | "ErrAlreadyThere";
 
-// Turn outcome discriminated union types
+// turn outcome (discriminated union) types
 interface PlacementOutcome {
     turnType: "Placement";
 }

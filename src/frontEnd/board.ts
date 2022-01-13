@@ -1,14 +1,20 @@
 import * as d3 from "d3";
-import { LatticeCoords, Piece, PieceColor, PieceType } from "@/types/common/piece";
-import { MoveDestination, TurnOutcome, TurnRequest } from "@/types/common/turn";
-import { GroupHandle, ScreenCoords, SelectedPiece, SVGContainer, TilePos } from "@/types/components/board";
 
-import HiveGame, { Bugs } from "@/logic/game";
-import Notation, { ParseError, PlanarDirection } from "@/logic/notation";
-import { PiecePositions, PlayerPiecePositions } from "@/types/logic/game";
+import { Piece, PieceColor, PieceType } from "@/types/common/piece";
+import { TurnOutcome, TurnRequest } from "@/types/common/turn";
+
+import Notation, { ParseError } from "@/frontEnd/notation";
+
+import { GroupHandle, ScreenCoords, SelectedPiece, SVGContainer, TilePos } from "@/types/frontEnd/board";
+
+import HiveGame from "@/backEnd/game";
+import HexGrid from "@/backEnd/hexGrid";
+
+import { LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
+
 // import icons from "@/ui/icons.svg";
 
-export default class Board {
+export default class Board extends HexGrid<TilePos> {
     private static svgContainer: SVGContainer;
     private static game: HiveGame;
 
@@ -45,12 +51,6 @@ export default class Board {
         selected: "#b80fc7"
     };
 
-    // TODO similar code to game.ts
-    private static adjacencies = [
-        // anticlockwise around reference from o-->
-        [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]
-    ] as const;
-
     // user-defined dimensions
     private width: number;
     private height: number;
@@ -63,14 +63,13 @@ export default class Board {
     private vertSpacing: number;
     private hexPath: d3.Path;
 
-    // piece positions
-    private piecePositions: PlayerPiecePositions<TilePos>;
-
     // selection tracking
     private selectedTile: SelectedPiece;
     private placeholders: GroupHandle[] = [];
 
     public constructor(width: number, height: number, hexRad: number, cornerRad: number, hexRadGap: number) {
+        super({ u: 0, v: 0 });
+
         Board.svgContainer = d3
             .select("svg")
             .attr("style", `outline: thin solid ${Board.uiColors.placeholder};`)
@@ -89,14 +88,6 @@ export default class Board {
         this.hexPath = Board.getRoundedHexPath(hexRad, cornerRad);
 
         this.selectedTile = null;
-        // TODO This initialization is very similar to that in game.ts. Make this seperate generic thing.
-        const startingPositions = () => Object.fromEntries(
-            Object.keys(Bugs).map(bug => [bug, new Array<TilePos>()])
-        ) as PiecePositions<TilePos>;
-        this.piecePositions = {
-            Black: startingPositions(),
-            White: startingPositions()
-        };
 
         // TODO: Find a good way of adding SVG defs to index.html in this constructor
         // d3.xml(icons).then(data => {
@@ -126,36 +117,6 @@ export default class Board {
         return path;
     }
 
-    // TODO this is similar code to game.ts... (only without mod)
-    private adjCoords(pos: LatticeCoords): LatticeCoords[] {
-        return Board.adjacencies.map(([du, dv]) => ({ u: pos.u + du, v: pos.v + dv }));
-    }
-
-    // TODO this is identical to code in game.ts...
-    private getExistingPiecePos(piece: Piece): TilePos | null {
-        const samePiecePositions = this.piecePositions[piece.color][piece.type];
-        if (!piece.index || samePiecePositions.length < piece.index) return null;
-        return samePiecePositions[piece.index - 1];
-    }
-
-    // TODO this is identical to code in game.ts...
-    // unsafe if piece.index does not exist or is too large
-    private setExistingPiecePos(piece: Piece, tilePos: TilePos): void {
-        const samePiecePositions = this.piecePositions[piece.color][piece.type];
-        samePiecePositions[piece.index as number - 1] = tilePos;
-    }
-
-    // TODO this is identical to code in game.ts...
-    private getDestinationPos(destination: MoveDestination): LatticeCoords | null {
-        if (destination === "Anywhere") return { u: 0, v: 0 }; // TODO change for midpoint
-
-        const refPos = this.getExistingPiecePos(destination.referencePiece);
-        if (!refPos) return null;
-
-        if (destination.direction === "Above") return refPos;
-        else return this.adjCoords(refPos)[PlanarDirection[destination.direction]];
-    }
-
     public processTurn(turn: TurnRequest): TurnOutcome;
     public processTurn(turnNotation: string): TurnOutcome | ParseError;
     public processTurn(turnOrNotation: string | TurnRequest): TurnOutcome | ParseError {
@@ -175,7 +136,7 @@ export default class Board {
         return outcome;
     }
 
-    private spawnTile(piece: Piece, destination: MoveDestination): void {
+    private spawnTile(piece: Piece, destination: RelativePosition): void {
         // get destination location
         const pos = this.getDestinationPos(destination);
         if (!pos) throw new Error("Cannot find tile spawn destination");
@@ -228,7 +189,7 @@ export default class Board {
         }
     }
 
-    public spawnPlaceholder(destination: MoveDestination): void {
+    public spawnPlaceholder(destination: RelativePosition): void {
         //  get position
         const pos = this.getDestinationPos(destination);
         if (!pos) throw new Error("Cannot find tile spawn destination");
@@ -265,7 +226,7 @@ export default class Board {
         this.placeholders.push(handle);
     }
 
-    private moveTile(piece: Piece, destination: MoveDestination): void {
+    private moveTile(piece: Piece, destination: RelativePosition): void {
         // get tile pos
         const tilePos = this.getExistingPiecePos(piece);
         if (!tilePos) throw new Error("Cannot find current tile position");

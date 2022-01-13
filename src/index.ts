@@ -1,4 +1,4 @@
-import Board from "@/components/board";
+import Board from "@/frontEnd/board";
 
 const hexRad = 90;
 const board = new Board(1600, 900, hexRad, hexRad / 6, hexRad / 18);

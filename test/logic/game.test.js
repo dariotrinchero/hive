@@ -1,4 +1,4 @@
-const { default: HiveGame } = require("@/logic/game");
+const { default: HiveGame } = require("@/backEnd/game");
 
 let game = null;
 

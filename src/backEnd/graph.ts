@@ -1,4 +1,4 @@
-import { BFSResults } from "@/types/logic/graph";
+import { BFSResults } from "@/types/backEnd/graph";
 
 export default class GraphUtils {
     public static bfs<V>(source: V, adj: (vertex: V) => V[]): BFSResults<V> {
