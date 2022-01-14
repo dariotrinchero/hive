@@ -1,9 +1,12 @@
 import { Piece, PieceType } from "@/types/common/piece";
-import { RelativePosition } from "@/types/backEnd/hexGrid";
+import {  LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
 
 // turn request types
-interface GenericMove {
+interface MoveBase {
     piece: Piece;
+}
+
+interface GenericMove extends MoveBase {
     destination: RelativePosition;
 }
 
@@ -37,11 +40,15 @@ interface MovementOutcome {
     turnType: "Movement";
 }
 
-export interface PlacementSuccess extends PlacementOutcome, GenericMove {
+interface GenericMoveSuccess extends MoveBase {
+    destination: LatticeCoords;
+}
+
+export interface PlacementSuccess extends PlacementOutcome, GenericMoveSuccess {
     status: "Success";
 }
 
-export interface MovementSuccess extends MovementOutcome, GenericMove {
+export interface MovementSuccess extends MovementOutcome, GenericMoveSuccess {
     status: "Success";
 }
 

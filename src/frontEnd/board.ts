@@ -5,16 +5,17 @@ import { TurnOutcome, TurnRequest } from "@/types/common/turn";
 
 import Notation, { ParseError } from "@/frontEnd/notation";
 
-import { GroupHandle, ScreenCoords, SelectedPiece, SVGContainer, TilePos } from "@/types/frontEnd/board";
+import { GroupHandle, ScreenCoords, SelectedTile, SVGContainer } from "@/types/frontEnd/board";
+
+import { LatticeCoords } from "@/types/backEnd/hexGrid";
 
 import HiveGame from "@/backEnd/game";
-import HexGrid from "@/backEnd/hexGrid";
 
-import { LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
+import PieceMap from "@/util/pieceMap";
 
 // import icons from "@/ui/icons.svg";
 
-export default class Board extends HexGrid<TilePos> {
+export default class Board {
     // static lookup-tables
     private static tileColorMap: { [color in PieceColor]: string } = {
         Black: "#363430",
@@ -64,8 +65,9 @@ export default class Board extends HexGrid<TilePos> {
 
     // SVG element handles
     private tileGroup: GroupHandle;
-    private selectedTile: SelectedPiece;
+    private selectedTile: SelectedTile;
     private placeholders: GroupHandle[] = [];
+    private pieceHandles: PieceMap<GroupHandle>;
 
     // pan & zoom tracking
     private pan: ScreenCoords;
@@ -73,7 +75,6 @@ export default class Board extends HexGrid<TilePos> {
     private zoom: number;
 
     public constructor(width: number, height: number, hexRad: number, cornerRad: number, hexRadGap: number) {
-        super({ u: 0, v: 0 });
         this.game = new HiveGame();
 
         const svgContainer = d3
@@ -82,6 +83,7 @@ export default class Board extends HexGrid<TilePos> {
             .attr("width", width)
             .attr("height", height);
         this.tileGroup = svgContainer.append("g");
+        this.pieceHandles = new PieceMap<GroupHandle>();
 
         // user-defined dimensions
         this.width = width;
@@ -98,7 +100,7 @@ export default class Board extends HexGrid<TilePos> {
         this.selectedTile = null;
 
         // pan & zoom tracking
-        this.pan = { x: 0, y: 0 };
+        this.pan = [0, 0];
         this.dragging = false;
         this.zoom = 1;
         this.bindPanAndZoom(svgContainer);
@@ -123,23 +125,25 @@ export default class Board extends HexGrid<TilePos> {
 
         svgContainer.on("mousemove", (e: MouseEvent) => {
             if (this.dragging) {
-                this.pan.x += e.movementX;
-                this.pan.y += e.movementY;
-                this.tileGroup.attr("transform", `translate(${this.pan.x},${this.pan.y})scale(${this.zoom})`);
+                this.pan[0] += e.movementX;
+                this.pan[1] += e.movementY;
+                this.tileGroup.attr("transform", `translate(${this.pan[0]},${this.pan[1]})scale(${this.zoom})`);
             }
         });
 
         svgContainer.on("wheel", (e: WheelEvent) => {
             e.preventDefault();
 
+            // limit zoom between 0.25 and 2
             let nextZoom = this.zoom + e.deltaY * -0.0005;
-            nextZoom = Math.min(Math.max(0.25, nextZoom), 2); // limit zoom between 0.25 and 2
-            const ratio = 1 - nextZoom / this.zoom;
+            nextZoom = Math.min(Math.max(0.25, nextZoom), 2);
 
+            // math to center zoom on cursor
+            const ratio = 1 - nextZoom / this.zoom;
             this.zoom = nextZoom;
-            this.pan.x += (e.clientX - this.pan.x) * ratio;
-            this.pan.y += (e.clientY - this.pan.y) * ratio;
-            this.tileGroup.attr("transform", `translate(${this.pan.x},${this.pan.y})scale(${this.zoom})`);
+            this.pan[0] += (e.clientX - this.pan[0]) * ratio;
+            this.pan[1] += (e.clientY - this.pan[1]) * ratio;
+            this.tileGroup.attr("transform", `translate(${this.pan[0]},${this.pan[1]})scale(${this.zoom})`);
         });
 
     }
@@ -184,42 +188,18 @@ export default class Board extends HexGrid<TilePos> {
         return outcome;
     }
 
-    private spawnTile(piece: Piece, destination: RelativePosition): void {
-        // get destination location
-        const pos = this.getDestinationPos(destination);
-        if (!pos) throw new Error("Cannot find tile spawn destination");
-
+    private spawnTile(piece: Piece, pos: LatticeCoords): void {
         // spawn tile
-        const { x, y } = this.convertCoordinates(pos);
+        const [x, y] = this.convertCoordinates(...pos);
         const handle = this.tileGroup
             .append("g")
             .attr("transform", `translate(${x},${y})`);
-        const hex = handle
-            .append("path")
+        handle.append("path")
             .attr("d", this.hexPath.toString())
             .style("fill", Board.tileColorMap[piece.color])
             .style("stroke-width", `${this.hexRadGap * Math.sqrt(3)}px`);
-
-        // TODO similar code to game.ts
-        const positions = this.piecePositions[piece.color][piece.type];
-        positions.push({ ...pos, handle });
-
-        // bind mouse events
-        handle.on("mouseenter", () => {
-            if (!this.selectedTile) hex.style("stroke", Board.uiColors.hover);
-        });
-        handle.on("mouseleave", () => {
-            if (!this.selectedTile) hex.style("stroke", "none");
-        });
-        handle.on("click", () => {
-            if (!this.selectedTile) {
-                this.selectedTile = { piece, tilePos: { ...pos, handle } };
-                hex.style("stroke", Board.uiColors.selected);
-            } else if (this.selectedTile.tilePos.u === pos.u && this.selectedTile.tilePos.v === pos.v) {
-                hex.style("stroke", Board.uiColors.hover);
-                this.selectedTile = null;
-            }
-        });
+        this.bindTile(piece, handle, pos); // bind mouse events
+        this.pieceHandles.setPiece(piece, handle);
 
         // add centered bug icon
         const bug = handle.append("use")
@@ -237,60 +217,98 @@ export default class Board extends HexGrid<TilePos> {
         }
     }
 
-    public spawnPlaceholder(destination: RelativePosition): void {
-        //  get position
-        const pos = this.getDestinationPos(destination);
-        if (!pos) throw new Error("Cannot find tile spawn destination");
+    private bindTile(piece: Piece, handle: GroupHandle, pos: LatticeCoords): void {
+        const thisIsSelected = () => this.selectedTile?.pos[0] === pos[0]
+            && this.selectedTile.pos[1] === pos[1];
+        const hex = handle.selectChild("path");
 
-        // spawn placeholder
-        const { x, y } = this.convertCoordinates(pos);
-        const handle = this.tileGroup
-            .append("g")
-            .style("stroke", Board.uiColors.placeholder)
-            .style("stroke-width", `${0.6 * this.hexRadGap}px`)
-            .style("fill", "#ffffff00")
-            .attr("transform", `translate(${x},${y})`);
-        [0.95, 0.6].forEach((scale, index) => {
-            const outline = handle
-                .append("path")
-                .attr("d", this.hexPath.toString())
-                .attr("transform", `scale(${scale})`);
-            if (index === 0) outline.style("stroke-dasharray", ("8, 4"));
-        });
-
-        // bind mouse events
-        handle.on("mouseenter", () => handle.style("fill", Board.uiColors.placeholderHover));
-        handle.on("mouseleave", () => handle.style("fill", "#ffffff00"));
-        handle.on("click", () => {
-            if (!this.selectedTile) {
-                console.error("Placeholder clicked with no selected tile.");
+        handle.on("mouseenter", () => {
+            if (!this.selectedTile || thisIsSelected()) {
+                hex.style("stroke", Board.uiColors.hover);
+                handle.style("cursor", "pointer");
             } else {
-                this.processTurn({ destination, piece: this.selectedTile.piece });
-                this.selectedTile.tilePos.handle.selectChild("path").style("stroke", "none");
-                this.selectedTile = null;
+                handle.style("cursor", "default");
             }
         });
 
-        this.placeholders.push(handle);
+        handle.on("mouseleave", () => {
+            if (!this.selectedTile) {
+                hex.style("stroke", "none");
+            } else if (thisIsSelected()) {
+                hex.style("stroke", Board.uiColors.selected);
+            }
+        });
+
+        handle.on("click", () => {
+            if (!this.selectedTile) {
+                this.selectedTile = { piece, pos };
+                hex.style("stroke", Board.uiColors.selected);
+            } else if (thisIsSelected()) {
+                hex.style("stroke", Board.uiColors.hover);
+                this.selectedTile = null;
+            }
+        });
     }
 
-    private moveTile(piece: Piece, destination: RelativePosition): void {
-        // get tile pos
-        const tilePos = this.getExistingPiecePos(piece);
-        if (!tilePos) throw new Error("Cannot find current tile position");
+    public spawnPlaceholder(...positions: LatticeCoords[]): void {
+        for (const pos of positions) {
+            const [x, y] = this.convertCoordinates(...pos);
+            const handle = this.tileGroup
+                .append("g")
+                .style("stroke", Board.uiColors.placeholder)
+                .style("stroke-width", `${0.6 * this.hexRadGap}px`)
+                .style("fill", "#ffffff00")
+                .attr("transform", `translate(${x},${y})`);
+            [0.95, 0.6].forEach((scale, index) => {
+                const outline = handle
+                    .append("path")
+                    .attr("d", this.hexPath.toString())
+                    .attr("transform", `scale(${scale})`);
+                if (index === 0) outline.style("stroke-dasharray", ("8, 4"));
+            });
 
-        // get destination
-        const toPos = this.getDestinationPos(destination);
-        if (!toPos) throw new Error("Cannot find tile spawn destination");
+            this.bindPlaceholder(pos, handle); // bind mouse events
+            this.placeholders.push(handle);
+        }
+    }
 
-        // move tile
-        const { x, y } = this.convertCoordinates(toPos);
-        tilePos.handle.attr("transform", `translate(${x},${y})`);
-        this.setExistingPiecePos(piece, { ...toPos, handle: tilePos.handle });
+    private bindPlaceholder(pos: LatticeCoords, handle: GroupHandle): void {
+        handle.on("mouseenter", () => {
+            if (this.selectedTile) {
+                handle.style("fill", Board.uiColors.placeholderHover);
+                handle.style("cursor", "pointer");
+            }
+        });
 
-        // delete all placeholders
-        this.placeholders.forEach(placeholder => placeholder.remove());
-        this.placeholders = [];
+        handle.on("mouseleave", () => {
+            handle.style("fill", "#ffffff00");
+            handle.style("cursor", "default");
+        });
+
+        handle.on("click", () => {
+            if (this.selectedTile) {
+                this.checkThenMoveTile(this.selectedTile.piece, pos);
+                this.pieceHandles.getPiece(this.selectedTile.piece)?.selectChild("path").style("stroke", "none");
+                this.selectedTile = null;
+
+                // delete all placeholders
+                this.placeholders.forEach(placeholder => placeholder.remove());
+                this.placeholders = [];
+            }
+        });
+    }
+
+    // TODO this could be better named...
+    private checkThenMoveTile(piece: Piece, destination: LatticeCoords) {
+        const outcome = this.game.movePiece(piece, destination);
+        if (outcome.status === "Success") this.moveTile(piece, destination);
+    }
+
+    private moveTile(piece: Piece, destination: LatticeCoords): void {
+        const handle = this.pieceHandles.getPiece(piece);
+        if (!handle) throw new Error("Cannot find piece handle to move it.");
+        const [x, y] = this.convertCoordinates(...destination);
+        handle.attr("transform", `translate(${x},${y})`);
     }
 
     /**
@@ -298,13 +316,14 @@ export default class Board extends HexGrid<TilePos> {
      * vectors (joining centers of adjacent hexagons lying along the horizontal and
      * along a pi/3 elevation), and screen-space xy-coordinates used by SVG.
      * 
-     * @param pos position of tile in lattice coordinates
+     * @param u TODO
+     * @param v TODO
      * @returns position of tile in SVG rectilinear coordinates
      */
-    private convertCoordinates(pos: LatticeCoords): ScreenCoords {
-        return {
-            x: this.horSpacing * (pos.u + pos.v / 2) + this.width / 2,
-            y: this.vertSpacing * pos.v + 1.0 * this.height / 2
-        };
+    private convertCoordinates(u: number, v: number): ScreenCoords {
+        return [
+            this.horSpacing * (u + v / 2) + this.width / 2,
+            this.vertSpacing * v + this.height / 2
+        ];
     }
 }

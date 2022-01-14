@@ -59,7 +59,10 @@ export default class Notation {
         if (movingPiece === "ParseError") return "ParseError";
 
         // special notation for first move
-        if (split[1] === ".") return { destination: "Anywhere", piece: movingPiece };
+        if (split[1] === ".") return {
+            destination: "Anywhere",
+            piece: movingPiece
+        };
 
         const matches = split[1].match(/^([/\\-])?(\w+)([/\\-])?$/i);
         if (!matches || matches[1] && matches[3]) return "ParseError";

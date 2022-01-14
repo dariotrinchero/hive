@@ -12,4 +12,4 @@ board.processTurn("bQ \\bA1");
 board.processTurn("wQ wG1/");
 board.processTurn("bS bB1\\");
 // board.processTurn("wL1 bS1-"); // move
-board.spawnPlaceholder({ direction: "o-", referencePiece: { color: "Black", index: 1, type: "Spider" } });
+board.spawnPlaceholder([0, 2]);

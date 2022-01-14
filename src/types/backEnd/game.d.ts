@@ -1,6 +1,4 @@
-import { Piece, PieceColor, PieceType } from "@/types/common/piece";
-
-export type PieceSpace = Piece | null;
+import { PieceColor, PieceType } from "@/types/common/piece";
 
 export type Inventory = Record<PieceType, number>;
 export type PlayerInventories = Record<PieceColor, Inventory>;

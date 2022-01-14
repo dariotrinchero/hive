@@ -7,9 +7,10 @@ const w = "White";
 const p = (c, t, i) => ({ color: c, type: t, index: i });
 
 const place = (piece, direction, ref) =>
-    game.placePiece(piece, ref ? { referencePiece: ref, direction } : "Anywhere");
+    game.placePiece(piece, game.getAbsolutePos(ref ? { referencePiece: ref, direction } : "Anywhere"));
 
-const move = (piece, direction, referencePiece) => game.movePiece(piece, { referencePiece, direction });
+const move = (piece, direction, referencePiece) =>
+    game.movePiece(piece, game.getAbsolutePos({ referencePiece, direction }));
 
 describe("When new piece is placed", () => {
     beforeEach(() => game = new HiveGame());
@@ -78,7 +79,7 @@ describe("When new piece is placed", () => {
         expect(place(p(b, "Beetle")).status).toBe("Success");
         expect(place(p(w, "Grasshopper"), "o-", p(b, "Beetle", 1)).status).toBe("Success");
         expect(place(p(b, "Beetle"), "-o", p(b, "Beetle", 1)).status).toBe("Success");
-        expect(place(p(w, "QueenBee"),"o-", p(w, "Grasshopper", 1)).status).toBe("Success");
+        expect(place(p(w, "QueenBee"), "o-", p(w, "Grasshopper", 1)).status).toBe("Success");
         expect(place(p(b, "Spider"), "-o", p(b, "Beetle", 2)).status).toBe("Success");
         expect(place(p(w, "Spider"), "o-", p(w, "QueenBee", 1)).status).toBe("Success");
         expect(place(p(b, "Spider"), "-o", p(b, "Spider", 1)).message).toBe("ErrMustBeQueen");
@@ -111,13 +112,13 @@ describe("When piece is moved", () => {
 
     it("rejects if moving piece is under-specified", () => {
         place(p(b, "QueenBee"));
-        place(p(w, "Beetle"), "o-", p(b, "Beetle", 1));
-        expect(move(p(b, "QueenBee"), "o\\", p(w, "Beetle")).message).toBe("ErrInvalidMovingPiece");
+        place(p(w, "Beetle"), "o-", p(b, "QueenBee", 1));
+        expect(move(p(b, "QueenBee"), "o\\", p(w, "Beetle", 1)).message).toBe("ErrInvalidMovingPiece");
     });
 
     it("rejects if destination reference piece is under-specified", () => {
         place(p(b, "QueenBee"));
-        place(p(w, "Beetle"), "o-", p(b, "Beetle", 1));
+        place(p(w, "Beetle"), "o-", p(b, "QueenBee", 1));
         expect(move(p(b, "QueenBee", 1), "o\\", p(w, "Beetle")).message).toBe("ErrInvalidDestination");
     });
 

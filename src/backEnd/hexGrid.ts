@@ -1,57 +1,98 @@
 import { Piece } from "@/types/common/piece";
 
-import { Bugs } from "@/backEnd/game";
-import { LatticeCoords, PiecePositions, PlayerPiecePositions, RelativePosition } from "@/types/backEnd/hexGrid";
+import { Direction, LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
+
+import PieceMap from "@/util/pieceMap";
 
 export enum PlanarDirection {
     // anticlockwise around reference (represented 'o') from o-->
     "o-", "o/", "\\o", "-o", "/o", "o\\"
 }
 
-export default class HexGrid<Cell extends LatticeCoords> {
-    protected static adjacencies = [
+export default class HexGrid {
+    private static adjacencies = [
         // anticlockwise around reference from o-->
         [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]
     ] as const;
 
-    protected defaultCell: LatticeCoords;
-    protected piecePositions: PlayerPiecePositions<Cell>;
+    private hexGrid: (Piece | null)[][];
 
-    protected constructor(defaultCell: LatticeCoords) {
-        this.defaultCell = defaultCell;
+    private defaultCell: LatticeCoords;
+    protected piecePositions: PieceMap<LatticeCoords>;
 
-        const startingPositions = () => Object.fromEntries(
-            Object.keys(Bugs).map(bug => [bug, new Array<Cell>()])
-        ) as PiecePositions<Cell>;
-        this.piecePositions = {
-            Black: startingPositions(),
-            White: startingPositions()
-        };
+    public constructor(gridSize: number, defaultCell?: LatticeCoords) {
+        this.defaultCell = defaultCell || [0, 0];
+        this.piecePositions = new PieceMap<LatticeCoords>();
+
+        this.hexGrid = new Array<Array<Piece | null>>(gridSize);
+        for (let i = 0; i < gridSize; i++) {
+            this.hexGrid[i] = new Array<Piece | null>(gridSize).fill(null);
+        }
     }
 
-    protected adjCoords(pos: LatticeCoords): LatticeCoords[] {
-        return HexGrid.adjacencies.map(([du, dv]) => ({ u: pos.u + du, v: pos.v + dv }));
+    public static equalPos(pos1: LatticeCoords, pos2: LatticeCoords) {
+        return pos1[0] === pos2[0] && pos1[1] === pos2[1];
     }
 
-    protected getExistingPiecePos(piece: Piece): Cell | null {
-        const samePiecePositions = this.piecePositions[piece.color][piece.type];
-        if (!piece.index || samePiecePositions.length < piece.index) return null;
-        return samePiecePositions[piece.index - 1];
+    public getPieceAtPos(pos: LatticeCoords): Piece | null {
+        pos = this.mod(pos);
+        return this.hexGrid[pos[0]][pos[1]];
     }
 
-    protected setExistingPiecePos(piece: Piece, pos: Cell): void {
-        // unsafe if piece.index does not exist or is too large
-        const samePiecePositions = this.piecePositions[piece.color][piece.type];
-        samePiecePositions[piece.index as number - 1] = pos;
+    public setPieceAtPos(pos: LatticeCoords, piece: Piece | null): void {
+        pos = this.mod(pos);
+        this.hexGrid[pos[0]][pos[1]] = piece;
     }
 
-    protected getDestinationPos(destination: RelativePosition): LatticeCoords | null {
-        if (destination === "Anywhere") return this.defaultCell;
+    private mod(pos: LatticeCoords): LatticeCoords {
+        const len: number = this.hexGrid.length;
+        const m = (coord: number) => (coord % len + len) % len;
+        return [m(pos[0]), m(pos[1])];
+    }
 
-        const refPos = this.getExistingPiecePos(destination.referencePiece);
+    public adjCoords(pos: LatticeCoords): LatticeCoords[] {
+        return HexGrid.adjacencies.map(([du, dv]) => [pos[0] + du, pos[1] + dv]);
+    }
+
+    public adjPieceCoords(pos: LatticeCoords): LatticeCoords[] {
+        return this.adjCoords(pos).filter(pos => this.getPieceAtPos(pos) !== null);
+    }
+
+    public adjPieces(pos: LatticeCoords): Piece[] {
+        return this.adjPieceCoords(pos).map(pos => this.getPieceAtPos(pos) as Piece);
+    }
+
+    public getAbsolutePos(relativePos: RelativePosition): LatticeCoords | null {
+        if (relativePos === "Anywhere") return this.defaultCell;
+
+        const refPos = this.piecePositions.getPiece(relativePos.referencePiece);
         if (!refPos) return null;
 
-        if (destination.direction === "Above") return refPos;
-        else return this.adjCoords(refPos)[PlanarDirection[destination.direction]];
+        if (relativePos.direction === "Above") return refPos;
+        else return this.adjCoords(refPos)[PlanarDirection[relativePos.direction]];
+    }
+
+    public getRelativePos(pos: LatticeCoords): RelativePosition | null {
+        // if pos already points to piece
+        const piece = this.getPieceAtPos(pos);
+        if (piece) return { direction: "Above", referencePiece: piece };
+
+        // if pos is empty space
+        let referencePiece: Piece | undefined;
+        let directionIndex = -1;
+        this.adjCoords(pos).find((p, i) => {
+            const piece = this.getPieceAtPos(p);
+            if (piece) {
+                referencePiece = piece;
+                directionIndex = i;
+                return true;
+            }
+        });
+        if (referencePiece) return {
+            direction: PlanarDirection[(directionIndex + 3) % 6] as Direction,
+            referencePiece
+        };
+
+        return null;
     }
 }
