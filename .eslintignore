@@ -6,4 +6,4 @@ test
 # config files
 .eslintrc.js
 jest.config.js
-webpack.config.js
+webpack.*
