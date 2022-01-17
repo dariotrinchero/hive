@@ -125,30 +125,31 @@ describe("When piece is moved", () => {
     it("rejects if destination is the same as origin", () => {
         place(p(w, "QueenBee"));
         place(p(b, "QueenBee"), "o-", p(w, "QueenBee", 1));
+        place(p(w, "Ant"), "-o", p(w, "QueenBee", 1));
         expect(move(p(b, "QueenBee", 1), "o-", p(w, "QueenBee", 1)).message).toBe("ErrAlreadyThere");
     });
 
-    it("rejects if destination is occupied (except for beetles)", () => {
-        place(p(b, "QueenBee"));
-        place(p(w, "QueenBee"), "-o", p(b, "QueenBee", 1));
-        place(p(b, "Grasshopper"), "o\\", p(b, "QueenBee", 1));
-        place(p(w, "Beetle"), "-o", p(w, "QueenBee", 1));
-        place(p(b, "Beetle"), "o-", p(b, "QueenBee", 1));
-        place(p(w, "Beetle"), "-o", p(w, "Beetle", 1));
-        expect(move(p(b, "Grasshopper", 1), "o-", p(w, "QueenBee", 1)).message).toBe("ErrDestinationOccupied");
-        expect(move(p(b, "Beetle", 1), "o-", p(w, "QueenBee", 1)).status).toBe("Success");
-    });
+    // it("rejects if destination is occupied (except for beetles)", () => {
+    //     place(p(b, "QueenBee"));
+    //     place(p(w, "QueenBee"), "-o", p(b, "QueenBee", 1));
+    //     place(p(b, "Grasshopper"), "o\\", p(b, "QueenBee", 1));
+    //     place(p(w, "Beetle"), "-o", p(w, "QueenBee", 1));
+    //     place(p(b, "Beetle"), "o-", p(b, "QueenBee", 1));
+    //     place(p(w, "Beetle"), "-o", p(w, "Beetle", 1));
+    //     expect(move(p(b, "Grasshopper", 1), "o-", p(w, "QueenBee", 1)).message).toBe("ErrDestinationOccupied");
+    //     expect(move(p(b, "Beetle", 1), "o-", p(w, "QueenBee", 1)).status).toBe("Success");
+    // });
 
-    it("rejects if destination is (explicitly) on top of hive (except for beetles)", () => {
-        place(p(b, "QueenBee"));
-        place(p(w, "QueenBee"), "-o", p(b, "QueenBee", 1));
-        place(p(b, "Grasshopper"), "o\\", p(b, "QueenBee", 1));
-        place(p(w, "Beetle"), "-o", p(w, "QueenBee", 1));
-        place(p(b, "Beetle"), "o-", p(b, "QueenBee", 1));
-        place(p(w, "Beetle"), "-o", p(w, "Beetle", 1));
-        expect(move(p(b, "Grasshopper", 1), "Above", p(b, "QueenBee", 1)).message).toBe("ErrDestinationOccupied");
-        expect(move(p(b, "Beetle", 1), "Above", p(b, "QueenBee", 1)).status).toBe("Success");
-    });
+    // it("rejects if destination is (explicitly) on top of hive (except for beetles)", () => {
+    //     place(p(b, "QueenBee"));
+    //     place(p(w, "QueenBee"), "-o", p(b, "QueenBee", 1));
+    //     place(p(b, "Grasshopper"), "o\\", p(b, "QueenBee", 1));
+    //     place(p(w, "Beetle"), "-o", p(w, "QueenBee", 1));
+    //     place(p(b, "Beetle"), "o-", p(b, "QueenBee", 1));
+    //     place(p(w, "Beetle"), "-o", p(w, "Beetle", 1));
+    //     expect(move(p(b, "Grasshopper", 1), "Above", p(b, "QueenBee", 1)).message).toBe("ErrDestinationOccupied");
+    //     expect(move(p(b, "Beetle", 1), "Above", p(b, "QueenBee", 1)).status).toBe("Success");
+    // });
 
     it("rejects if out-of-turn", () => {
         place(p(b, "QueenBee"));
@@ -189,6 +190,11 @@ describe("When piece is moved", () => {
         expect(move(p(b, "QueenBee", 1), "\\o", p(w, "QueenBee", 1)).message).toBe("ErrViolatesQueenBeeMovement");
         expect(move(p(b, "QueenBee", 1), "o/", p(w, "QueenBee", 1)).status).toBe("Success");
     });
+
+    // TODO add move specific bug movement checks
+    // TODO add pillbug immobilization checks; test that it only applies on the very next turn, even if pillbug-user subsequently
+    // places or passes instead of moving
+    // TODO test how pillbug interacts with unplayed queen
 });
 
 describe("When the game is over", () => {

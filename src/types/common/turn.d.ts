@@ -27,8 +27,8 @@ export type PlacementErrorMsg = CommonErrorMsg
 export type MovementErrorMsg = CommonErrorMsg
     | `ErrViolates${PieceType}Movement`
     | "ErrQueenUnplayed"
-    | "ErrFreedomToMoveRule"
     | "ErrInvalidMovingPiece"
+    | "ErrPieceMovedLastTurn"
     | "ErrAlreadyThere";
 
 // turn outcome (discriminated union) types

@@ -54,8 +54,13 @@ export default class HexGrid {
         return HexGrid.adjacencies.map(([du, dv]) => [pos[0] + du, pos[1] + dv]);
     }
 
-    public adjPieceCoords(pos: LatticeCoords): LatticeCoords[] {
-        return this.adjCoords(pos).filter(pos => this.getPieceAtPos(pos) !== null);
+    public adjPieceCoords(pos: LatticeCoords, ignore?: LatticeCoords): LatticeCoords[] {
+        return this.adjCoords(pos).filter(pos =>
+            this.getPieceAtPos(pos) !== null && !(ignore && HexGrid.equalPos(pos, ignore)));
+    }
+
+    public adjSpaceCoords(pos: LatticeCoords): LatticeCoords[] {
+        return this.adjCoords(pos).filter(pos => this.getPieceAtPos(pos) === null);
     }
 
     public adjPieces(pos: LatticeCoords): Piece[] {

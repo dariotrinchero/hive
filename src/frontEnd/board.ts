@@ -44,6 +44,7 @@ export default class Board {
     };
     private static uiColors = {
         hover: "#e50bbd99",
+        pillbugPlaceholder: "#49ad9299",
         placeholder: "#e50bbd55",
         placeholderHover: "#e50bbd33",
         selected: "#b80fc7"
@@ -241,35 +242,62 @@ export default class Board {
 
         handle.on("click", () => {
             if (!this.selectedTile) {
-                this.selectedTile = { piece, pos };
-                hex.style("stroke", Board.uiColors.selected);
+                // spawn placeholders
+                const canMove = this.game.pieceMayMove(piece);
+                let hasLegalMoves = false;
+                if (canMove === "Success") {
+                    for (const pos of this.game.getMoves(piece)) {
+                        this.spawnPlaceholder(pos);
+                        hasLegalMoves = true;
+                    }
+                }
+                if (canMove === "Success" || canMove === "OnlyByPillbug") {
+                    // TODO spawn special pillbug move placeholders here
+                    for (const pos of this.game.getPillbugMoves(piece)) {
+                        this.spawnPlaceholder(pos, true);
+                        hasLegalMoves = true;
+                    }
+                }
+
+                // select tile if it has legal moves
+                if (hasLegalMoves) {
+                    this.selectedTile = { piece, pos };
+                    hex.style("stroke", Board.uiColors.selected);
+                } else {
+                    // TODO handle clicking of piece with no legal moves
+                    console.log("Clicked piece has no legal moves");
+                }
             } else if (thisIsSelected()) {
                 hex.style("stroke", Board.uiColors.hover);
                 this.selectedTile = null;
+                this.clearPlaceholders();
             }
         });
     }
 
-    public spawnPlaceholder(...positions: LatticeCoords[]): void {
-        for (const pos of positions) {
-            const [x, y] = this.convertCoordinates(...pos);
-            const handle = this.tileGroup
-                .append("g")
-                .style("stroke", Board.uiColors.placeholder)
-                .style("stroke-width", `${0.6 * this.hexRadGap}px`)
-                .style("fill", "#ffffff00")
-                .attr("transform", `translate(${x},${y})`);
-            [0.95, 0.6].forEach((scale, index) => {
-                const outline = handle
-                    .append("path")
-                    .attr("d", this.hexPath.toString())
-                    .attr("transform", `scale(${scale})`);
-                if (index === 0) outline.style("stroke-dasharray", ("8, 4"));
-            });
+    public spawnPlaceholder(pos: LatticeCoords, pillbug?: boolean): void {
+        const [x, y] = this.convertCoordinates(...pos);
+        const handle = this.tileGroup
+            .append("g")
+            .style("stroke", Board.uiColors[pillbug ? "pillbugPlaceholder" : "placeholder"])
+            .style("stroke-width", `${0.6 * this.hexRadGap}px`)
+            .style("fill", "#ffffff00")
+            .attr("transform", `translate(${x},${y})`);
+        [0.95, 0.6].forEach((scale, index) => {
+            const outline = handle
+                .append("path")
+                .attr("d", this.hexPath.toString())
+                .attr("transform", `scale(${scale})`);
+            if (index === 0) outline.style("stroke-dasharray", ("8, 4"));
+        });
 
-            this.bindPlaceholder(pos, handle); // bind mouse events
-            this.placeholders.push(handle);
-        }
+        this.bindPlaceholder(pos, handle); // bind mouse events
+        this.placeholders.push(handle);
+    }
+
+    public clearPlaceholders(): void {
+        this.placeholders.forEach(placeholder => placeholder.remove());
+        this.placeholders = [];
     }
 
     private bindPlaceholder(pos: LatticeCoords, handle: GroupHandle): void {
@@ -290,10 +318,7 @@ export default class Board {
                 this.checkThenMoveTile(this.selectedTile.piece, pos);
                 this.pieceHandles.getPiece(this.selectedTile.piece)?.selectChild("path").style("stroke", "none");
                 this.selectedTile = null;
-
-                // delete all placeholders
-                this.placeholders.forEach(placeholder => placeholder.remove());
-                this.placeholders = [];
+                this.clearPlaceholders();
             }
         });
     }
@@ -301,6 +326,7 @@ export default class Board {
     // TODO this could be better named...
     private checkThenMoveTile(piece: Piece, destination: LatticeCoords) {
         const outcome = this.game.movePiece(piece, destination);
+        console.log(outcome);
         if (outcome.status === "Success") this.moveTile(piece, destination);
     }
 

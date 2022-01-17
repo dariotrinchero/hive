@@ -1,9 +1,10 @@
-export type AdjFunc<V> = (vertex: V) => V[];
 export type Stringify<V> = (vertex: V) => string;
 
-export interface BFSResults<V> { // V is type of vertices
-    source: V;
-    marked: { [edge: string]: boolean };
-    edgeTo: { [edge: string]: V };
+export type AdjFunc<V> = (vertex: V, distance: number) => V[];
+export type Filter<V> = (vertex: V, distance: number) => boolean;
+
+export interface BFSResults<V> {
+    distance: { [v: string]: number; }; // undefined distance means unreached vertex
+    edgeTo: { [v: string]: V; };
     connectedCount: number;
 }
