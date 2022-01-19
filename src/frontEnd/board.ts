@@ -1,16 +1,15 @@
-import * as d3 from "d3";
-
-import { Piece, PieceColor, PieceType } from "@/types/common/piece";
-import { TurnOutcome, TurnRequest } from "@/types/common/turn";
+import { select, selectAll } from "d3-selection";
+import { easeCubic } from "d3-ease";
+import "d3-transition";
 
 import Notation, { ParseError } from "@/frontEnd/notation";
-import icons from "@/frontEnd/icons.json";
-
-import { GroupHandle, ScreenCoords, SelectedPiece, SVGContainer } from "@/types/frontEnd/board";
-
+import * as icons from "@/frontEnd/icons.json";
 import HiveGame from "@/backEnd/game";
 
-import { LatticeCoords } from "@/types/backEnd/hexGrid";
+import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
+import type { TurnOutcome, TurnRequest } from "@/types/common/turn";
+import type { GroupHandle, ScreenCoords, SelectedPiece, SVGContainer } from "@/types/frontEnd/board";
+import type { LatticeCoords } from "@/types/backEnd/hexGrid";
 
 export default class Board {
     // static lookup-tables
@@ -29,7 +28,7 @@ export default class Board {
         Spider: "#9f622d"
     };
     private static bugScaleMap: { [bug in PieceType]: number } = {
-        // ratio bugHeight/hexRadius which looks best for each bug
+        // ratio of bugHeight/hexRadius which looks best for each bug
         Ant: 1.29981,
         Beetle: 1.50629,
         Grasshopper: 1.60499,
@@ -49,21 +48,19 @@ export default class Board {
     };
 
     private game: HiveGame = new HiveGame();
+    private playArea: GroupHandle;
 
     // user-defined dimensions
-    private width: number;
-    private height: number;
     private hexRadius: number;
     private hexRadGap: number;
 
     // precalculated quantities
-    private gappedHexRad: number;
+    private width: number;
+    private height: number;
     private horSpacing: number;
     private vertSpacing: number;
-    private hexPath: d3.Path;
 
-    // SVG element handles
-    private playArea: GroupHandle;
+    // selection tracking
     private selectedPiece: SelectedPiece = null;
     private placeholderSet: { [pos: string]: boolean; } = {};
 
@@ -72,62 +69,73 @@ export default class Board {
     private dragging = false;
     private zoom = 1;
 
-    public constructor(hexRad: number, cornerRad: number, hexRadGap: number) {
+    public constructor(hexRadius: number, cornerRad: number, hexRadGap: number) {
+        // set user-defined dimensions
+        this.hexRadius = hexRadius;
+        this.hexRadGap = hexRadGap;
+
         // create containers
-        const svgContainer = d3.select("body")
+        const svgContainer = select("body")
             .append("svg")
             .attr("width", "100%")
             .attr("height", "100%");
         this.bindPanAndZoom(svgContainer);
         this.playArea = svgContainer.append("g");
 
-        // add bug path definitions
+        // define bug icon paths
         const defs = svgContainer.append("defs");
         Object.entries(icons).forEach(([bug, path]) =>
             defs.append("path")
                 .attr("id", bug)
                 .attr("d", path));
 
-        // user-defined dimensions
-        this.hexRadius = hexRad;
-        this.hexRadGap = hexRadGap;
+        // define rounded hex path
+        defs.append("path")
+            .attr("id", "hex")
+            .attr("d", Board.roundedHexPath(hexRadius, cornerRad));
 
-        // precalculated quantities
+        // precalculate other dimensions
         const playAreaBBox = svgContainer.node()?.getBoundingClientRect();
         this.width = playAreaBBox?.width || 1920;
         this.height = playAreaBBox?.height || 666;
-
-        this.gappedHexRad = hexRad + hexRadGap;
-        this.horSpacing = Math.sqrt(3) * this.gappedHexRad;
-        this.vertSpacing = 1.5 * this.gappedHexRad;
-
-        this.hexPath = Board.getRoundedHexPath(hexRad, cornerRad);
+        this.horSpacing = Math.sqrt(3) * (hexRadius + hexRadGap);
+        this.vertSpacing = 1.5 * (hexRadius + hexRadGap);
     }
 
-    private static getRoundedHexPath(hexRad: number, cornerRad: number): d3.Path {
+    /**
+     * Get path definition string for a hexagon of given radius with rounded corners of given radius.
+     * 
+     * @param hexRad radius of circle in which un-rounded hexagon fits snugly
+     * @param cornerRad radius of circle arcs to use for rounding corners (cuts off corner)
+     * @returns SVG path definition string ('d' attribute of <path>) for rounded hexagon
+     */
+    private static roundedHexPath(hexRad: number, cornerRad: number): string {
         const thirdPi: number = Math.PI / 3;
-        const innerRad: number = hexRad - cornerRad;
-        const path: d3.Path = d3.path();
+        const innerRad: number = hexRad - 2 * cornerRad / Math.sqrt(3);
 
+        let hexPath = "";
         for (let i = 0; i < 6; i++) {
             const theta: number = i * thirdPi;
-            const sin: number = Math.sin(theta);
-            const cos: number = Math.cos(theta);
-            const pts: number[][] = [1, -1].map((d: number) => [
-                innerRad * sin + cornerRad * Math.sin(theta - d * thirdPi),
-                innerRad * cos + cornerRad * Math.cos(theta - d * thirdPi)
+            const [[x1, y1], [x2, y2]] = [1, -1].map((d: number) => [
+                innerRad * Math.sin(theta) + cornerRad * Math.sin(theta - d * thirdPi / 2),
+                innerRad * Math.cos(theta) + cornerRad * Math.cos(theta - d * thirdPi / 2)
             ]);
-            if (i === 0) path.moveTo(pts[0][0], pts[0][1]);
-            else path.lineTo(pts[0][0], pts[0][1]);
-            path.arcTo(hexRad * sin, hexRad * cos, pts[1][0], pts[1][1], cornerRad);
+
+            hexPath += `${i ? "L" : "M"}${x1},${y1}` // move/line to (x1,y1)
+                + `A${cornerRad},${cornerRad},0,0,0,${x2},${y2}`; // arc to (x2,y2)
         }
-        path.closePath();
-        return path;
+        return hexPath + "Z"; // close path
     }
 
+    /**
+     * Create event bindings on given SVG container that react to zooming via scroll wheel and panning via
+     * clicking and dragging.
+     * 
+     * @param svgContainer SVG container on which to create bindings
+     */
     private bindPanAndZoom(svgContainer: SVGContainer): void {
-        svgContainer.on("mousedown", (e: MouseEvent) => this.dragging ||= e.button === 1);
-        svgContainer.on("mouseup", (e: MouseEvent) => this.dragging &&= e.button !== 1);
+        svgContainer.on("mousedown", (e: MouseEvent) => this.dragging ||= e.button <= 1);
+        svgContainer.on("mouseup", (e: MouseEvent) => this.dragging &&= e.button > 1);
         svgContainer.on("mouseleave", () => this.dragging = false);
 
         svgContainer.on("mousemove", (e: MouseEvent) => {
@@ -180,8 +188,8 @@ export default class Board {
             .append("g")
             .attr("id", Notation.pieceToString(piece))
             .attr("transform", `translate(${x},${y})`);
-        handle.append("path")
-            .attr("d", this.hexPath.toString())
+        handle.append("use")
+            .attr("xlink:href", "#hex")
             .style("fill", Board.tileColorMap[piece.color])
             .style("stroke-width", `${this.hexRadGap * Math.sqrt(3)}px`);
         this.bindTile(piece, handle, pos); // bind mouse events
@@ -204,7 +212,7 @@ export default class Board {
     private bindTile(piece: Piece, handle: GroupHandle, pos: LatticeCoords): void {
         const thisIsSelected = () => this.selectedPiece?.pos[0] === pos[0]
             && this.selectedPiece.pos[1] === pos[1];
-        const hex = handle.selectChild("path");
+        const hex = handle.selectChild("use");
 
         handle.on("mouseenter", () => {
             if (!this.selectedPiece || thisIsSelected()) {
@@ -223,10 +231,12 @@ export default class Board {
             }
         });
 
-        handle.on("click", () => {
+        handle.on("mousedown", (e: MouseEvent) => {
+            e.stopImmediatePropagation();
+
             if (!this.selectedPiece) {
                 // spawn placeholders
-                const canMove = this.game.pieceMayMove(piece);
+                const canMove = this.game.checkPieceForMove(piece);
                 let hasLegalMoves = false;
                 if (canMove === "Success") {
                     for (const dest of this.game.getMoves(piece)) {
@@ -269,9 +279,8 @@ export default class Board {
                 .style("fill", "#ffffff00")
                 .attr("transform", `translate(${x},${y})`);
             [0.95, 0.6].forEach((scale, index) => {
-                const outline = handle
-                    .append("path")
-                    .attr("d", this.hexPath.toString())
+                const outline = handle.append("use")
+                    .attr("xlink:href", "#hex")
                     .attr("transform", `scale(${scale})`);
                 if (index === 0) outline.style("stroke-dasharray", ("8, 4"));
             });
@@ -282,7 +291,7 @@ export default class Board {
     }
 
     private clearPlaceholders(): void {
-        d3.selectAll(".placeholder").remove();
+        selectAll(".placeholder").remove();
         this.placeholderSet = {};
     }
 
@@ -299,12 +308,10 @@ export default class Board {
             handle.style("cursor", "default");
         });
 
-        handle.on("click", () => {
+        handle.on("mousedown", (e: MouseEvent) => e.stopImmediatePropagation());
+        handle.on("mouseup", () => {
             if (this.selectedPiece) {
                 this.checkThenMoveTile(this.selectedPiece.piece, pos);
-                d3.select(`#${Notation.pieceToString(this.selectedPiece.piece)}`)
-                    .selectChild("path")
-                    .style("stroke", "none");
                 this.selectedPiece = null;
                 this.clearPlaceholders();
             }
@@ -325,9 +332,14 @@ export default class Board {
             y -= this.hexRadGap * (piece.height - 1);
         }
 
-        const handle = d3.select(`#${Notation.pieceToString(piece)}`)
+        const handle = select(`#${Notation.pieceToString(piece)}`)
+            .raise();
+        handle.selectChild("use")
+            .style("stroke", "none");
+        handle.transition()
+            .duration(150)
+            .ease(easeCubic)
             .attr("transform", `translate(${x},${y})`);
-        if (piece.covering) handle.raise(); // render on top
     }
 
     /**

@@ -1,9 +1,11 @@
-import { Piece } from "@/types/common/piece";
-import { LatticeCoords } from "@/types/backEnd/hexGrid";
+import type { Selection } from "d3-selection";
+
+import type { Piece } from "@/types/common/piece";
+import type { LatticeCoords } from "@/types/backEnd/hexGrid";
 
 // SVG element handles
-export type SVGContainer = d3.Selection<SVGSVGElement, unknown, HTMLElement, unknown>;
-export type GroupHandle = d3.Selection<SVGGElement, unknown, HTMLElement, unknown>;
+export type SVGContainer = Selection<SVGSVGElement, unknown, HTMLElement, unknown>;
+export type GroupHandle = Selection<SVGGElement, unknown, HTMLElement, unknown>;
 
 export type SelectedPiece = null | {
     piece: Piece;

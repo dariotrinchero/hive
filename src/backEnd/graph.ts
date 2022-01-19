@@ -1,4 +1,4 @@
-import { AdjFunc, BFSResults, Filter, Stringify, VertexSet } from "@/types/backEnd/graph";
+import type { AdjFunc, BFSResults, Filter, Stringify, VertexSet } from "@/types/backEnd/graph";
 
 export default class GraphUtils<V> {
     private stringify: Stringify<V>;
@@ -9,7 +9,7 @@ export default class GraphUtils<V> {
 
     private *bfs(source: V, adj: AdjFunc<V>, maxDist?: number, collect?: Filter<V>): Generator<V, BFSResults<V>> {
         // initialize results
-        const edgeTo: { [v: string]: V; } = {};
+        const edgeTo: VertexSet<V> = {};
         const distance: { [v: string]: number; } = {};
         let connectedCount = 0;
 
@@ -24,24 +24,25 @@ export default class GraphUtils<V> {
             const vDist: number = distance[this.stringify(v)];
             if (maxDist && vDist >= maxDist) break;
 
-            // enqueue unmarked adjacencies
+            // process unmarked adjacencies
             for (const w of adj(v, vDist)) {
                 const wStr = this.stringify(w);
-                if (typeof distance[wStr] === "undefined") { // w unmarked
-                    edgeTo[wStr] = v;
-                    distance[wStr] = vDist + 1;
-                    connectedCount++;
+                if (typeof distance[wStr] !== "undefined") continue;
 
-                    queue.push(w);
-                    if (!collect || collect(w, vDist + 1)) yield w; // will never collect source
-                }
+                // record new vertex
+                edgeTo[wStr] = v;
+                distance[wStr] = vDist + 1;
+                connectedCount++;
+                if (!collect || collect(w, vDist + 1)) yield w; // never collects 'source'
+
+                queue.push(w);
             }
         }
 
         return { connectedCount, distance, edgeTo };
     }
 
-    public *walkNSteps(source: V, adj: AdjFunc<V>, steps: number): Generator<V, void, undefined> {
+    public *walkNSteps(source: V, adj: AdjFunc<V>, steps: number): Generator<V> {
         let currSet: VertexSet<V> = { [this.stringify(source)]: source };
 
         for (let distance = 0; distance < steps; distance++) {
@@ -64,9 +65,10 @@ export default class GraphUtils<V> {
 
     public countConnected(source: V, adj: AdjFunc<V>): number {
         const generator = this.bfs(source, adj);
-        let next;
-        do next = generator.next();
-        while (!next.done);
+        let next = generator.next();
+
+        // since we omit a Filter<V>, this will always run 1 iteration
+        while (!next.done) next = generator.next();
         return next.value.connectedCount;
     }
 

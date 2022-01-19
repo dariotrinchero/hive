@@ -1,6 +1,6 @@
-import { PieceColor, PieceType } from "@/types/common/piece";
-import { MovementErrorMsg, PlacementErrorMsg } from "@/types/common/turn";
-import { LatticeCoords } from "@/types/backEnd/hexGrid";
+import type { PieceColor, PieceType } from "@/types/common/piece";
+import type { MovementErrorMsg, PlacementErrorMsg } from "@/types/common/turn";
+import type { LatticeCoords } from "@/types/backEnd/hexGrid";
 
 // player trackers
 export type Inventory = Record<PieceType, number>;

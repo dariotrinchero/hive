@@ -1,5 +1,5 @@
-import { Piece, PieceType } from "@/types/common/piece";
-import {  LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
+import type { Piece, PieceType } from "@/types/common/piece";
+import type {  LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
 
 // turn request types
 interface MoveBase {

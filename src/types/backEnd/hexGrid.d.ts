@@ -1,4 +1,4 @@
-import { Piece } from "@/types/common/piece";
+import type { Piece } from "@/types/common/piece";
 import { PlanarDirection } from "@/backEnd/hexGrid";
 
 // absolute grid positioning

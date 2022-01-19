@@ -1,5 +1,6 @@
-import { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import HiveGame, { Bugs } from "@/backEnd/game";
+
+import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 
 export default class PieceMap<T> {
     private record: Record<PieceColor, Record<PieceType, T[]>>;

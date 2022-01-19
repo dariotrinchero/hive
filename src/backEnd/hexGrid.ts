@@ -1,8 +1,7 @@
-import { Piece } from "@/types/common/piece";
-
-import { Direction, LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
-
 import PieceMap from "@/util/pieceMap";
+
+import type { Piece } from "@/types/common/piece";
+import type { Direction, LatticeCoords, RelativePosition } from "@/types/backEnd/hexGrid";
 
 export enum PlanarDirection {
     // anticlockwise around reference (represented 'o') from o-->
