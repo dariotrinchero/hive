@@ -1,5 +1,5 @@
 import { Piece, PieceColor, PieceType } from "@/types/common/piece";
-import { Bugs } from "@/backEnd/game";
+import HiveGame, { Bugs } from "@/backEnd/game";
 
 export default class PieceMap<T> {
     private record: Record<PieceColor, Record<PieceType, T[]>>;
@@ -14,9 +14,19 @@ export default class PieceMap<T> {
         };
     }
 
+    public static equalPiece(piece1: Piece, piece2: Piece): boolean {
+        return piece1.color === piece2.color
+            && piece1.type === piece2.type
+            && piece1.index === piece2.index;
+    }
+
     public getPiece(piece: Piece): T | null {
         const record = this.record[piece.color][piece.type];
-        if (!piece.index || record.length < piece.index) return null;
+        if (!piece.index) {
+            if (HiveGame.startingInventory[piece.type] > 1) return null;
+            piece.index = 1;
+        }
+        if (record.length < piece.index) return null;
         return record[piece.index - 1];
     }
 

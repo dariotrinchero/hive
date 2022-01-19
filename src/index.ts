@@ -1,7 +1,7 @@
 import Board from "@/frontEnd/board";
 
 const hexRad = 90;
-const board = new Board(1600, 900, hexRad, hexRad / 6, hexRad / 18);
+const board = new Board(hexRad, hexRad / 6, hexRad / 18);
 board.processTurn("bA .");
 board.processTurn("wG bA1-");
 board.processTurn("bB /bA1");
@@ -11,4 +11,6 @@ board.processTurn("wP wG1\\");
 board.processTurn("bQ \\bA1");
 board.processTurn("wQ wG1/");
 board.processTurn("bS bB1\\");
-// board.processTurn("wL1 bS1-"); // move
+board.processTurn("wB wP-");
+board.processTurn("bB \\bM");
+// board.processTurn("wL bQ1-"); // move

@@ -1,4 +1,4 @@
-import { Bugs, Players  } from "@/backEnd/game";
+import { Bugs, Players } from "@/backEnd/game";
 
 export type PieceColor = keyof typeof Players;
 
@@ -8,5 +8,8 @@ export interface Piece {
     type: PieceType;
     color: PieceColor;
     index?: number;
-    covering?: Piece; // for beetles
+
+    // for pieces on the hive:
+    covering?: Piece;
+    height?: number;
 }

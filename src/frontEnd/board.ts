@@ -4,16 +4,13 @@ import { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import { TurnOutcome, TurnRequest } from "@/types/common/turn";
 
 import Notation, { ParseError } from "@/frontEnd/notation";
+import icons from "@/frontEnd/icons.json";
 
-import { GroupHandle, ScreenCoords, SelectedTile, SVGContainer } from "@/types/frontEnd/board";
-
-import { LatticeCoords } from "@/types/backEnd/hexGrid";
+import { GroupHandle, ScreenCoords, SelectedPiece, SVGContainer } from "@/types/frontEnd/board";
 
 import HiveGame from "@/backEnd/game";
 
-import PieceMap from "@/util/pieceMap";
-
-// import icons from "@/ui/icons.svg";
+import { LatticeCoords } from "@/types/backEnd/hexGrid";
 
 export default class Board {
     // static lookup-tables
@@ -44,13 +41,14 @@ export default class Board {
     };
     private static uiColors = {
         hover: "#e50bbd99",
-        pillbugPlaceholder: "#49ad9299",
-        placeholder: "#e50bbd55",
+        pillbugPlaceholder: "#49ad92bb",
+        pillbugPlaceholderHover: "#49ad9277",
+        placeholder: "#e50bbd77",
         placeholderHover: "#e50bbd33",
         selected: "#b80fc7"
     };
 
-    private game: HiveGame;
+    private game: HiveGame = new HiveGame();
 
     // user-defined dimensions
     private width: number;
@@ -65,70 +63,78 @@ export default class Board {
     private hexPath: d3.Path;
 
     // SVG element handles
-    private tileGroup: GroupHandle;
-    private selectedTile: SelectedTile;
-    private placeholders: GroupHandle[] = [];
-    private pieceHandles: PieceMap<GroupHandle>;
+    private playArea: GroupHandle;
+    private selectedPiece: SelectedPiece = null;
+    private placeholderSet: { [pos: string]: boolean; } = {};
 
     // pan & zoom tracking
-    private pan: ScreenCoords;
-    private dragging: boolean;
-    private zoom: number;
+    private pan: ScreenCoords = [0, 0];
+    private dragging = false;
+    private zoom = 1;
 
-    public constructor(width: number, height: number, hexRad: number, cornerRad: number, hexRadGap: number) {
-        this.game = new HiveGame();
+    public constructor(hexRad: number, cornerRad: number, hexRadGap: number) {
+        // create containers
+        const svgContainer = d3.select("body")
+            .append("svg")
+            .attr("width", "100%")
+            .attr("height", "100%");
+        this.bindPanAndZoom(svgContainer);
+        this.playArea = svgContainer.append("g");
 
-        const svgContainer = d3
-            .select("svg")
-            .attr("style", `outline: thin solid ${Board.uiColors.placeholder};`)
-            .attr("width", width)
-            .attr("height", height);
-        this.tileGroup = svgContainer.append("g");
-        this.pieceHandles = new PieceMap<GroupHandle>();
+        // add bug path definitions
+        const defs = svgContainer.append("defs");
+        Object.entries(icons).forEach(([bug, path]) =>
+            defs.append("path")
+                .attr("id", bug)
+                .attr("d", path));
 
         // user-defined dimensions
-        this.width = width;
-        this.height = height;
         this.hexRadius = hexRad;
         this.hexRadGap = hexRadGap;
 
         // precalculated quantities
+        const playAreaBBox = svgContainer.node()?.getBoundingClientRect();
+        this.width = playAreaBBox?.width || 1920;
+        this.height = playAreaBBox?.height || 666;
+
         this.gappedHexRad = hexRad + hexRadGap;
         this.horSpacing = Math.sqrt(3) * this.gappedHexRad;
         this.vertSpacing = 1.5 * this.gappedHexRad;
+
         this.hexPath = Board.getRoundedHexPath(hexRad, cornerRad);
-
-        this.selectedTile = null;
-
-        // pan & zoom tracking
-        this.pan = [0, 0];
-        this.dragging = false;
-        this.zoom = 1;
-        this.bindPanAndZoom(svgContainer);
-
-        // TODO: Find a good way of adding SVG defs to index.html in this constructor
-        // d3.xml(icons).then(data => {
-        //     const svg = document.body.getElementsByTagName("svg")[0];
-        //     svg.insertBefore(data.documentElement.children[0], svg.firstChild);
-        // }).catch(error => throw new Error(`Unable to initialize board UI due to error: ${error}`));
     }
 
-    private bindPanAndZoom(svgContainer: SVGContainer) {
-        svgContainer.on("mousedown", (e: MouseEvent) => {
-            if (e.button === 1) this.dragging = true;
-        });
+    private static getRoundedHexPath(hexRad: number, cornerRad: number): d3.Path {
+        const thirdPi: number = Math.PI / 3;
+        const innerRad: number = hexRad - cornerRad;
+        const path: d3.Path = d3.path();
 
-        svgContainer.on("mouseup", (e: MouseEvent) => {
-            if (e.button === 1) this.dragging = false;
-        });
+        for (let i = 0; i < 6; i++) {
+            const theta: number = i * thirdPi;
+            const sin: number = Math.sin(theta);
+            const cos: number = Math.cos(theta);
+            const pts: number[][] = [1, -1].map((d: number) => [
+                innerRad * sin + cornerRad * Math.sin(theta - d * thirdPi),
+                innerRad * cos + cornerRad * Math.cos(theta - d * thirdPi)
+            ]);
+            if (i === 0) path.moveTo(pts[0][0], pts[0][1]);
+            else path.lineTo(pts[0][0], pts[0][1]);
+            path.arcTo(hexRad * sin, hexRad * cos, pts[1][0], pts[1][1], cornerRad);
+        }
+        path.closePath();
+        return path;
+    }
 
+    private bindPanAndZoom(svgContainer: SVGContainer): void {
+        svgContainer.on("mousedown", (e: MouseEvent) => this.dragging ||= e.button === 1);
+        svgContainer.on("mouseup", (e: MouseEvent) => this.dragging &&= e.button !== 1);
         svgContainer.on("mouseleave", () => this.dragging = false);
 
         svgContainer.on("mousemove", (e: MouseEvent) => {
             if (this.dragging) {
                 this.pan[0] += e.movementX;
                 this.pan[1] += e.movementY;
-                this.tileGroup.attr("transform", `translate(${this.pan[0]},${this.pan[1]})scale(${this.zoom})`);
+                this.playArea.attr("transform", `translate(${this.pan[0]},${this.pan[1]})scale(${this.zoom})`);
             }
         });
 
@@ -144,30 +150,8 @@ export default class Board {
             this.zoom = nextZoom;
             this.pan[0] += (e.clientX - this.pan[0]) * ratio;
             this.pan[1] += (e.clientY - this.pan[1]) * ratio;
-            this.tileGroup.attr("transform", `translate(${this.pan[0]},${this.pan[1]})scale(${this.zoom})`);
+            this.playArea.attr("transform", `translate(${this.pan[0]},${this.pan[1]})scale(${this.zoom})`);
         });
-
-    }
-
-    private static getRoundedHexPath(hexRad: number, cornerRad: number): d3.Path {
-        const thirdPi: number = Math.PI / 3;
-        const innerRad: number = hexRad - cornerRad;
-        const path: d3.Path = d3.path();
-
-        d3.range(6).forEach(i => {
-            const theta: number = i * thirdPi;
-            const sin: number = Math.sin(theta);
-            const cos: number = Math.cos(theta);
-            const pts: number[][] = [1, -1].map((d: number) => [
-                innerRad * sin + cornerRad * Math.sin(theta - d * thirdPi),
-                innerRad * cos + cornerRad * Math.cos(theta - d * thirdPi)
-            ]);
-            if (i === 0) path.moveTo(pts[0][0], pts[0][1]);
-            else path.lineTo(pts[0][0], pts[0][1]);
-            path.arcTo(hexRad * sin, hexRad * cos, pts[1][0], pts[1][1], cornerRad);
-        });
-        path.closePath();
-        return path;
     }
 
     public processTurn(turn: TurnRequest): TurnOutcome;
@@ -192,39 +176,38 @@ export default class Board {
     private spawnTile(piece: Piece, pos: LatticeCoords): void {
         // spawn tile
         const [x, y] = this.convertCoordinates(...pos);
-        const handle = this.tileGroup
+        const handle = this.playArea
             .append("g")
+            .attr("id", Notation.pieceToString(piece))
             .attr("transform", `translate(${x},${y})`);
         handle.append("path")
             .attr("d", this.hexPath.toString())
             .style("fill", Board.tileColorMap[piece.color])
             .style("stroke-width", `${this.hexRadGap * Math.sqrt(3)}px`);
         this.bindTile(piece, handle, pos); // bind mouse events
-        this.pieceHandles.setPiece(piece, handle);
 
         // add centered bug icon
+        const strokeWidth = piece.type === "Pillbug" ? 1 : 0;
+        const bugColor = Board.bugColorMap[piece.type];
         const bug = handle.append("use")
             .attr("xlink:href", `#${piece.type}`)
-            .style("fill", Board.bugColorMap[piece.type])
-            .style("stroke", Board.bugColorMap[piece.type]);
+            .style("fill", bugColor)
+            .style("stroke", bugColor)
+            .style("stroke-width", `${strokeWidth}px`);
 
-        const bugBBox = bug.node()?.getBoundingClientRect();
-        if (bugBBox) {
-            const scale: number = Board.bugScaleMap[piece.type] * this.hexRadius / bugBBox.height;
-            // TODO why 2px off for x translation?
-            bug.attr("transform", `scale(${scale})translate(-${bugBBox.width / 2 - 2},-${bugBBox.height / 2})`);
-        } else {
-            throw new Error("Cannot determine bug icon bounding box.");
-        }
+        const { height, width } = bug.node()?.getBoundingClientRect() || { height: 120, width: 100 };
+        const scale: number = Board.bugScaleMap[piece.type] * this.hexRadius / height;
+        bug.attr("transform", `scale(${scale})`
+            + `translate(-${width / 2 - 2 * strokeWidth},-${height / 2})`);
     }
 
     private bindTile(piece: Piece, handle: GroupHandle, pos: LatticeCoords): void {
-        const thisIsSelected = () => this.selectedTile?.pos[0] === pos[0]
-            && this.selectedTile.pos[1] === pos[1];
+        const thisIsSelected = () => this.selectedPiece?.pos[0] === pos[0]
+            && this.selectedPiece.pos[1] === pos[1];
         const hex = handle.selectChild("path");
 
         handle.on("mouseenter", () => {
-            if (!this.selectedTile || thisIsSelected()) {
+            if (!this.selectedPiece || thisIsSelected()) {
                 hex.style("stroke", Board.uiColors.hover);
                 handle.style("cursor", "pointer");
             } else {
@@ -233,7 +216,7 @@ export default class Board {
         });
 
         handle.on("mouseleave", () => {
-            if (!this.selectedTile) {
+            if (!this.selectedPiece) {
                 hex.style("stroke", "none");
             } else if (thisIsSelected()) {
                 hex.style("stroke", Board.uiColors.selected);
@@ -241,69 +224,72 @@ export default class Board {
         });
 
         handle.on("click", () => {
-            if (!this.selectedTile) {
+            if (!this.selectedPiece) {
                 // spawn placeholders
                 const canMove = this.game.pieceMayMove(piece);
                 let hasLegalMoves = false;
                 if (canMove === "Success") {
-                    for (const pos of this.game.getMoves(piece)) {
-                        this.spawnPlaceholder(pos);
+                    for (const dest of this.game.getMoves(piece)) {
+                        this.spawnPlaceholder(dest);
                         hasLegalMoves = true;
                     }
                 }
                 if (canMove === "Success" || canMove === "OnlyByPillbug") {
                     // TODO spawn special pillbug move placeholders here
-                    for (const pos of this.game.getPillbugMoves(piece)) {
-                        this.spawnPlaceholder(pos, true);
+                    for (const dest of this.game.getPillbugMoves(piece)) {
+                        this.spawnPlaceholder(dest, true);
                         hasLegalMoves = true;
                     }
                 }
 
                 // select tile if it has legal moves
                 if (hasLegalMoves) {
-                    this.selectedTile = { piece, pos };
+                    this.selectedPiece = { piece, pos };
                     hex.style("stroke", Board.uiColors.selected);
                 } else {
                     // TODO handle clicking of piece with no legal moves
-                    console.log("Clicked piece has no legal moves");
+                    console.error(`No legal moves: pieceMayMove() returned ${canMove}`);
                 }
             } else if (thisIsSelected()) {
                 hex.style("stroke", Board.uiColors.hover);
-                this.selectedTile = null;
+                this.selectedPiece = null;
                 this.clearPlaceholders();
             }
         });
     }
 
-    public spawnPlaceholder(pos: LatticeCoords, pillbug?: boolean): void {
-        const [x, y] = this.convertCoordinates(...pos);
-        const handle = this.tileGroup
-            .append("g")
-            .style("stroke", Board.uiColors[pillbug ? "pillbugPlaceholder" : "placeholder"])
-            .style("stroke-width", `${0.6 * this.hexRadGap}px`)
-            .style("fill", "#ffffff00")
-            .attr("transform", `translate(${x},${y})`);
-        [0.95, 0.6].forEach((scale, index) => {
-            const outline = handle
-                .append("path")
-                .attr("d", this.hexPath.toString())
-                .attr("transform", `scale(${scale})`);
-            if (index === 0) outline.style("stroke-dasharray", ("8, 4"));
-        });
+    private spawnPlaceholder(pos: LatticeCoords, pillbug?: boolean): void {
+        if (!this.placeholderSet[pos.join(",")]) {
+            const [x, y] = this.convertCoordinates(...pos);
+            const handle = this.playArea
+                .append("g")
+                .attr("class", "placeholder")
+                .style("stroke", Board.uiColors[pillbug ? "pillbugPlaceholder" : "placeholder"])
+                .style("stroke-width", `${0.6 * this.hexRadGap}px`)
+                .style("fill", "#ffffff00")
+                .attr("transform", `translate(${x},${y})`);
+            [0.95, 0.6].forEach((scale, index) => {
+                const outline = handle
+                    .append("path")
+                    .attr("d", this.hexPath.toString())
+                    .attr("transform", `scale(${scale})`);
+                if (index === 0) outline.style("stroke-dasharray", ("8, 4"));
+            });
 
-        this.bindPlaceholder(pos, handle); // bind mouse events
-        this.placeholders.push(handle);
+            this.bindPlaceholder(pos, handle, pillbug); // bind mouse events
+            this.placeholderSet[pos.join(",")] = true;
+        }
     }
 
-    public clearPlaceholders(): void {
-        this.placeholders.forEach(placeholder => placeholder.remove());
-        this.placeholders = [];
+    private clearPlaceholders(): void {
+        d3.selectAll(".placeholder").remove();
+        this.placeholderSet = {};
     }
 
-    private bindPlaceholder(pos: LatticeCoords, handle: GroupHandle): void {
+    private bindPlaceholder(pos: LatticeCoords, handle: GroupHandle, pillbug?: boolean): void {
         handle.on("mouseenter", () => {
-            if (this.selectedTile) {
-                handle.style("fill", Board.uiColors.placeholderHover);
+            if (this.selectedPiece) {
+                handle.style("fill", Board.uiColors[pillbug ? "pillbugPlaceholderHover" : "placeholderHover"]);
                 handle.style("cursor", "pointer");
             }
         });
@@ -314,16 +300,17 @@ export default class Board {
         });
 
         handle.on("click", () => {
-            if (this.selectedTile) {
-                this.checkThenMoveTile(this.selectedTile.piece, pos);
-                this.pieceHandles.getPiece(this.selectedTile.piece)?.selectChild("path").style("stroke", "none");
-                this.selectedTile = null;
+            if (this.selectedPiece) {
+                this.checkThenMoveTile(this.selectedPiece.piece, pos);
+                d3.select(`#${Notation.pieceToString(this.selectedPiece.piece)}`)
+                    .selectChild("path")
+                    .style("stroke", "none");
+                this.selectedPiece = null;
                 this.clearPlaceholders();
             }
         });
     }
 
-    // TODO this could be better named...
     private checkThenMoveTile(piece: Piece, destination: LatticeCoords) {
         const outcome = this.game.movePiece(piece, destination);
         console.log(outcome);
@@ -331,10 +318,16 @@ export default class Board {
     }
 
     private moveTile(piece: Piece, destination: LatticeCoords): void {
-        const handle = this.pieceHandles.getPiece(piece);
-        if (!handle) throw new Error("Cannot find piece handle to move it.");
-        const [x, y] = this.convertCoordinates(...destination);
-        handle.attr("transform", `translate(${x},${y})`);
+        let [x, y] = this.convertCoordinates(...destination);
+        if (piece.height && piece.height > 1) {
+            // TODO show this better
+            x += this.hexRadGap * (piece.height - 1);
+            y -= this.hexRadGap * (piece.height - 1);
+        }
+
+        const handle = d3.select(`#${Notation.pieceToString(piece)}`)
+            .attr("transform", `translate(${x},${y})`);
+        if (piece.covering) handle.raise(); // render on top
     }
 
     /**
@@ -342,8 +335,8 @@ export default class Board {
      * vectors (joining centers of adjacent hexagons lying along the horizontal and
      * along a pi/3 elevation), and screen-space xy-coordinates used by SVG.
      * 
-     * @param u TODO
-     * @param v TODO
+     * @param u coefficient of horizontal lattice base vector
+     * @param v coefficient of lattice base vector along pi/3 elevation
      * @returns position of tile in SVG rectilinear coordinates
      */
     private convertCoordinates(u: number, v: number): ScreenCoords {

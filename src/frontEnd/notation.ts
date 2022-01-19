@@ -32,9 +32,8 @@ export default class Notation {
         const type = Notation.charToPieceType(notation.charAt(1));
         if (type === "ParseError") return "ParseError";
 
-        let index = 0;
         if (notation.length >= 3) {
-            index = parseInt(notation.slice(2));
+            const index = parseInt(notation.slice(2));
             if (isNaN(index) || HiveGame.startingInventory[type] < index) return "ParseError";
             return { color, index, type };
         }

@@ -1,4 +1,4 @@
-import { AdjFunc, BFSResults, Filter, Stringify } from "@/types/backEnd/graph";
+import { AdjFunc, BFSResults, Filter, Stringify, VertexSet } from "@/types/backEnd/graph";
 
 export default class GraphUtils<V> {
     private stringify: Stringify<V>;
@@ -7,7 +7,7 @@ export default class GraphUtils<V> {
         this.stringify = stringify || ((vertex: V) => JSON.stringify(vertex));
     }
 
-    private *bfs(source: V, adj: AdjFunc<V>, collect?: Filter<V>, maxDist?: number): Generator<V, BFSResults<V>> {
+    private *bfs(source: V, adj: AdjFunc<V>, maxDist?: number, collect?: Filter<V>): Generator<V, BFSResults<V>> {
         // initialize results
         const edgeTo: { [v: string]: V; } = {};
         const distance: { [v: string]: number; } = {};
@@ -33,7 +33,7 @@ export default class GraphUtils<V> {
                     connectedCount++;
 
                     queue.push(w);
-                    if (!collect || collect(w, vDist + 1)) yield w;
+                    if (!collect || collect(w, vDist + 1)) yield w; // will never collect source
                 }
             }
         }
@@ -42,20 +42,23 @@ export default class GraphUtils<V> {
     }
 
     public *walkNSteps(source: V, adj: AdjFunc<V>, steps: number): Generator<V, void, undefined> {
-        let reached: V[] = [source];
+        let currSet: VertexSet<V> = { [this.stringify(source)]: source };
 
-        // perform all steps but one
-        for (let distance = 0; distance < steps - 1; distance++) {
-            const nextSet: { [v: string]: V; } = {};
-            for (const v of reached) {
-                for (const w of adj(v, distance)) nextSet[this.stringify(w)] = w;
+        for (let distance = 0; distance < steps; distance++) {
+            // take another step
+            const nextSet: VertexSet<V> = {};
+            for (const v of Object.values(currSet)) {
+                for (const w of adj(v, distance)) {
+                    const wStr = this.stringify(w); // may stringify a vertex multiple times
+                    if (!nextSet[wStr]) {
+                        if (distance === steps - 1) yield w;
+                        nextSet[wStr] = w;
+                    }
+                }
             }
-            reached = [...Object.values(nextSet)];
-        }
 
-        // perform last step online
-        for (const v of reached) {
-            for (const w of adj(v, steps - 1)) yield w;
+            // update set of visited vertices
+            currSet = { ...nextSet };
         }
     }
 
@@ -67,7 +70,7 @@ export default class GraphUtils<V> {
         return next.value.connectedCount;
     }
 
-    public *collect(source: V, adj: AdjFunc<V>, collect?: Filter<V>, maxDist?: number): Generator<V> {
-        yield* this.bfs(source, adj, collect, maxDist);
+    public *collect(source: V, adj: AdjFunc<V>, maxDist?: number, collect?: Filter<V>): Generator<V> {
+        yield* this.bfs(source, adj, maxDist, collect);
     }
 }

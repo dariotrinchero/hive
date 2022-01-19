@@ -8,6 +8,7 @@ import {
 } from "@/types/common/turn";
 import { Piece, PieceColor, PieceType } from "@/types/common/piece";
 
+import PieceMap from "@/util/pieceMap";
 import GraphUtils from "@/backEnd/graph";
 import HexGrid from "@/backEnd/hexGrid";
 
@@ -20,7 +21,7 @@ import {
     PlacementCount,
     PlayerInventories
 } from "@/types/backEnd/game";
-import { Filter } from "@/types/backEnd/graph";
+import { AdjFunc, Filter } from "@/types/backEnd/graph";
 import { LatticeCoords } from "@/types/backEnd/hexGrid";
 
 export enum Players {
@@ -63,7 +64,7 @@ export default class HiveGame extends HexGrid {
     private gameStatus: GameStatus;
 
     public constructor() {
-        super(HiveGame.playSpaceSize, [0, 0]); // TODO change for midpoint
+        super(HiveGame.playSpaceSize);
 
         this.playerInventories = {
             Black: { ...HiveGame.startingInventory },
@@ -75,11 +76,11 @@ export default class HiveGame extends HexGrid {
         this.gameStatus = "Ongoing";
     }
 
-    public currentTurn(): PieceColor {
+    public currTurn(): PieceColor {
         return this.currTurnColor;
     }
 
-    public nextTurn(): PieceColor {
+    private nextTurn(): PieceColor {
         return this.currTurnColor === "Black" ? "White" : "Black";
     }
 
@@ -92,7 +93,7 @@ export default class HiveGame extends HexGrid {
 
     private isImmobile(pos: LatticeCoords): boolean {
         const oppLastMove = this.movedLastTurn[this.nextTurn()];
-        return oppLastMove !== null && HiveGame.equalPos(oppLastMove, pos);
+        return oppLastMove !== null && HiveGame.eqPos(oppLastMove, pos);
     }
 
     private checkPlacement(piece: Piece, pos: LatticeCoords): PlacementCheckOutcome {
@@ -102,7 +103,7 @@ export default class HiveGame extends HexGrid {
         // basic immediate rejections
         if (this.gameStatus !== "Ongoing") return "ErrGameOver";
         if (this.currTurnColor !== piece.color) return "ErrOutOfTurn";
-        if (this.getPieceAtPos(pos) !== null) return "ErrDestinationOccupied";
+        if (this.getAt(pos) !== null) return "ErrDestinationOccupied";
         if (this.adjPieceCoords(pos).length === 0) return "ErrOneHiveRule";
         if (this.playerInventories[piece.color][piece.type] <= 0) return "ErrOutOfPieces";
 
@@ -121,22 +122,20 @@ export default class HiveGame extends HexGrid {
     }
 
     public placePiece(piece: Piece, destination: LatticeCoords | null): PlacementSuccess | PlacementError {
-        if (!destination) return {
+        const error: PlacementError = {
             message: "ErrInvalidDestination",
             status: "Error",
             turnType: "Placement"
         };
+        if (!destination) return error;
 
-        const checkOutcome = this.checkPlacement(piece, destination);
-        if (checkOutcome !== "Success") return {
-            message: checkOutcome,
-            status: "Error",
-            turnType: "Placement"
-        };
+        const message = this.checkPlacement(piece, destination);
+        if (message !== "Success") return { ...error, message };
 
         // spawn piece
         piece.index = this.piecePositions.addPiece(piece, destination);
-        this.setPieceAtPos(destination, piece);
+        piece.height = 1;
+        this.setAt(destination, piece);
 
         // advance turn
         if (this.turnCount === 0) this.currTurnColor = piece.color;
@@ -153,33 +152,53 @@ export default class HiveGame extends HexGrid {
     }
 
     private adjSlideSpaces(pos: LatticeCoords, ignore?: LatticeCoords): LatticeCoords[] {
-        return this.adjCoords(pos).filter((pos, i, arr) => {
-            const minusOne: LatticeCoords = arr[(i + 5) % 6];
-            const plusOne: LatticeCoords = arr[(i + 1) % 6];
-            const shouldIgnore = (pos: LatticeCoords) => ignore && HiveGame.equalPos(pos, ignore);
+        return this.adjCoords(pos).filter((adjPos, i, arr) => {
+            const gatePos = [5, 1].map(d => arr[(i + d) % 6]);
+            const shouldIgnore = (adjPos: LatticeCoords) => ignore && HiveGame.eqPos(adjPos, ignore);
 
-            let validSlide = this.getPieceAtPos(pos) === null || shouldIgnore(pos);
-            if (this.getPieceAtPos(minusOne) === null || shouldIgnore(minusOne)) {
-                validSlide &&= this.getPieceAtPos(plusOne) !== null && !shouldIgnore(plusOne);
+            let validSlide: boolean | undefined = this.getAt(adjPos) === null;
+            if (!this.getAt(gatePos[0]) || shouldIgnore(gatePos[0])) {
+                validSlide &&= this.getAt(gatePos[1]) !== null && !shouldIgnore(gatePos[1]);
             } else {
-                validSlide &&= this.getPieceAtPos(plusOne) === null || shouldIgnore(plusOne);
+                validSlide &&= this.getAt(gatePos[1]) === null || shouldIgnore(gatePos[1]);
             }
             return validSlide;
         });
     }
 
-    private checkOneHive(fromPos: LatticeCoords): boolean {
+    private adjMounts(pos: LatticeCoords, ignore?: LatticeCoords, dismount?: boolean): LatticeCoords[] {
+        let height = this.getAt(pos)?.height || 0;
+        if (ignore && HiveGame.eqPos(pos, ignore)) height -= 1;
+
+        return this.adjCoords(pos).filter((adjPos, i, arr) => {
+            if (ignore && HiveGame.eqPos(adjPos, ignore)) return false;
+
+            const gateHeights = [5, 1].map(d => this.getAt(arr[(i + d) % 6])?.height || 0);
+            const destination = this.getAt(adjPos);
+
+            let validMount = Math.min(...gateHeights) <= Math.max(height, destination?.height || 0);
+            if (dismount === true) validMount &&= !destination;
+            else if (dismount === false) validMount &&= destination !== null;
+            else validMount &&= (destination !== null || height >= 1);
+            return validMount;
+        });
+    }
+
+    private checkOneHive(piece: Piece, fromPos: LatticeCoords): boolean {
+        // accept if piece is stacked
+        if (piece.covering) return true;
+
         // accept if all adjacent pieces already connect with each other
         let lastSeenSpace = true;
         let groupsSeen = 0;
         const adjacent: LatticeCoords[] = this.adjCoords(fromPos);
         adjacent.forEach(pos => {
-            if (this.getPieceAtPos(pos) !== null) {
+            if (this.getAt(pos) !== null) {
                 if (lastSeenSpace) groupsSeen++;
                 lastSeenSpace = false;
             } else lastSeenSpace = true;
         });
-        if (!lastSeenSpace && this.getPieceAtPos(adjacent[0]) !== null) groupsSeen--; // if we began in connected group
+        if (!lastSeenSpace && this.getAt(adjacent[0]) !== null) groupsSeen--; // if we began in connected group
         if (groupsSeen === 1) return true;
 
         // reject if removing piece from original location disconnects 
@@ -196,16 +215,17 @@ export default class HiveGame extends HexGrid {
         fromPos = fromPos || this.piecePositions.getPiece(piece) || undefined;
         if (!fromPos) return "ErrInvalidMovingPiece";
 
-        // TODO reject if piece is covered...
+        const pieceAtFromPos = this.getAt(fromPos);
+        if (!pieceAtFromPos) return "ErrInvalidMovingPiece";
+        if (!PieceMap.equalPiece(piece, pieceAtFromPos)) return "ErrCovered";
 
         if (this.isImmobile(fromPos)) return "ErrPieceMovedLastTurn";
-        if (!this.checkOneHive(fromPos)) return "ErrOneHiveRule";
+        if (!this.checkOneHive(piece, fromPos)) return "ErrOneHiveRule";
 
         if (this.currTurnColor !== piece.color) return "OnlyByPillbug";
         return "Success";
     }
 
-    // TODO yields duplicate moves sometimes
     public *getMoves(piece: Piece, fromPos?: LatticeCoords, mosquitoTypeOverride?: PieceType): Generator<LatticeCoords, void, undefined> {
         fromPos = fromPos || this.piecePositions.getPiece(piece) || undefined;
         if (!fromPos) return;
@@ -217,91 +237,82 @@ export default class HiveGame extends HexGrid {
             if (piece.covering) yield* this.getMoves(piece, fromPos, "Beetle");
             else {
                 for (const p of this.adjPieces(fromPos)) {
-                    if (p.type !== "Mosquito") {
-                        yield* this.getMoves(piece, fromPos, p.type);
-                    }
+                    if (p.type !== "Mosquito") yield* this.getMoves(piece, fromPos, p.type);
                 }
             }
         } else if (type === "Grasshopper") {
-            for (const i of [0, 1, 2, 3, 4, 5]) {
+            for (let i = 0; i < 3; i++) {
                 yield* HiveGame.graphUtils.collect(
                     fromPos,
-                    (pos) => this.getPieceAtPos(pos) ? [this.adjCoords(pos)[i]] : [],
-                    (pos, distance) => distance > 1 && !this.getPieceAtPos(pos)
+                    (pos) => {
+                        if (!this.getAt(pos)) return [];
+                        const adj = this.adjCoords(pos);
+                        return [adj[i], adj[(i + 3) % 6]];
+                    },
+                    undefined,
+                    (pos, distance) => distance > 1 && !this.getAt(pos)
                 );
             }
-        } else if (type === "Beetle") {
-            // TODO add mounting / dismounting
-            // TODO beetle may not mount / dismount / move through a second-level gate
-            yield* HiveGame.graphUtils.collect(
-                fromPos,
-                (pos) => this.adjSlideSpaces(pos, fromPos),
-                undefined,
-                1
-            );
         } else if (type === "Ladybug") {
-            // TODO ladybug may not mount / dismount / move through a second-level gate
             yield* HiveGame.graphUtils.walkNSteps(
                 fromPos,
-                (pos, distance) => {
-                    if (distance < 2) return this.adjPieceCoords(pos, fromPos);
-                    else if (distance === 2) return this.adjSpaceCoords(pos);
-                    return [];
-                },
+                (pos, distance) => this.adjMounts(pos, fromPos, distance === 2),
                 3
             );
-        } else { // all simple sliding pieces
+        } else {
+            let adjFunc: AdjFunc<LatticeCoords> = (pos) => this.adjSlideSpaces(pos, fromPos);
             let maxDist;
             let filter: Filter<LatticeCoords> | undefined;
-            if (type === "QueenBee" || type === "Pillbug") maxDist = 1;
-            else if (type === "Spider") {
-                filter = (_pos, distance) => distance === 3;
+
+            if (type === "QueenBee" || type === "Pillbug") {
+                maxDist = 1;
+            } else if (type === "Spider") {
+                filter = (_p, distance) => distance === 3;
                 maxDist = 3;
+            } else if (type === "Beetle") {
+                adjFunc = (pos) => this.adjMounts(pos, fromPos)
+                    .concat(piece.covering ? [] : this.adjSlideSpaces(pos, fromPos));
+                maxDist = 1;
             }
-            yield* HiveGame.graphUtils.collect(
-                fromPos,
-                (pos) => this.adjSlideSpaces(pos, fromPos),
-                filter,
-                maxDist
-            );
+
+            yield* HiveGame.graphUtils.collect(fromPos, adjFunc, maxDist, filter);
         }
     }
 
-    // TODO assumes piece CAN MOVE: canMove() should always be called before this method to confirm this
     public getPillbugMoves(piece: Piece, fromPos?: LatticeCoords): LatticeCoords[] {
-        // pillbug cannot move stacked pieces
-        if (piece.covering) return [];
-
-        // TODO pillbug may not yeet through a second-level gate
+        if (piece.covering) return []; // cannot move stacked pieces
 
         fromPos = fromPos || this.piecePositions.getPiece(piece) || undefined;
         if (!fromPos) return [];
 
         const pillbugPos = this.adjPieceCoords(fromPos).find(adjPos => {
-            // immobile pillbug / mosquito cannot use special ability
-            if (this.isImmobile(adjPos)) return false;
+            if (this.isImmobile(adjPos)) return false; // immobility disallows special ability
 
-            const adjPiece = this.getPieceAtPos(adjPos);
+            const adjPiece = this.getAt(adjPos);
             if (adjPiece?.color !== this.currTurnColor) return false;
 
             return adjPiece.type === "Pillbug"
                 || adjPiece.type === "Mosquito"
                 && this.adjPieces(adjPos).some(p => p.type === "Pillbug");
         });
-
         if (!pillbugPos) return [];
-        return this.adjSpaceCoords(pillbugPos);
+
+        const mayMountPillbug = this.adjMounts(fromPos, fromPos, false)
+            .some(p => HiveGame.eqPos(p, pillbugPos));
+        if (!mayMountPillbug) return [];
+
+        return this.adjMounts(pillbugPos, fromPos, true);
     }
 
     private checkPieceMovement(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
         for (const pos of this.getMoves(piece, fromPos)) {
-            if (HiveGame.equalPos(pos, toPos)) return true;
+            if (HiveGame.eqPos(pos, toPos)) return true;
         }
         return false;
     }
 
     private checkPillbugMove(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
-        return this.getPillbugMoves(piece, fromPos).some(pos => HiveGame.equalPos(pos, toPos));
+        return this.getPillbugMoves(piece, fromPos).some(pos => HiveGame.eqPos(pos, toPos));
     }
 
     private checkMove(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords): MovementCheckOutcome {
@@ -312,37 +323,33 @@ export default class HiveGame extends HexGrid {
             if (!validPillbugMove) return "ErrOutOfTurn";
         } else if (canMove !== "Success") return canMove;
 
-        if (HiveGame.equalPos(fromPos, toPos)) return "ErrAlreadyThere";
-        if (this.adjPieceCoords(toPos, fromPos).length === 0) return "ErrOneHiveRule";
-        if (this.getPieceAtPos(toPos) !== null && piece.type !== "Beetle" && piece.type !== "Mosquito") return "ErrDestinationOccupied";
+        if (HiveGame.eqPos(fromPos, toPos)) return "ErrAlreadyThere";
+        if (this.adjPieceCoords(toPos, piece.covering ? undefined : fromPos).length === 0) return "ErrOneHiveRule";
+        if (this.getAt(toPos) !== null && piece.type !== "Beetle" && piece.type !== "Mosquito") return "ErrDestinationOccupied";
         if (!validPillbugMove && !this.checkPieceMovement(piece, fromPos, toPos)) return `ErrViolates${piece.type}Movement`;
 
         return canMove;
     }
 
     public movePiece(piece: Piece, destination: LatticeCoords | null): MovementSuccess | MovementError {
-        // TODO find some way of merging first two checks with checkMove(), as this is redundant
-        if (!destination) return {
+        const error: MovementError = {
             message: "ErrInvalidDestination",
             status: "Error",
             turnType: "Movement"
         };
+        if (!destination) return error;
+
         const fromPos = this.piecePositions.getPiece(piece);
-        if (!fromPos) return {
-            message: "ErrInvalidMovingPiece",
-            status: "Error",
-            turnType: "Movement"
-        };
-        const checkOutcome = this.checkMove(piece, fromPos, destination);
-        if (checkOutcome !== "Success" && checkOutcome !== "OnlyByPillbug") return {
-            message: checkOutcome,
-            status: "Error",
-            turnType: "Movement"
-        };
+        if (!fromPos) return { ...error, message: "ErrInvalidMovingPiece" };
+
+        const message = this.checkMove(piece, fromPos, destination);
+        if (message !== "Success" && message !== "OnlyByPillbug") return { ...error, message };
 
         this.piecePositions.setPiece(piece, destination);
-        this.setPieceAtPos(fromPos, null);
-        this.setPieceAtPos(destination, piece);
+        this.setAt(fromPos, piece.covering || null);
+        piece.covering = this.getAt(destination) || undefined;
+        piece.height = 1 + (piece.covering?.height || 0);
+        this.setAt(destination, piece);
         this.advanceTurn(destination);
 
         return {
@@ -355,13 +362,13 @@ export default class HiveGame extends HexGrid {
 
     public processTurn(turn: TurnRequest): TurnOutcome {
         // handle passed turn
-        if (turn === "Pass") { // TODO reject pass if moves are available?
+        if (turn === "Pass") { // TODO reject pass if moves are available (https://boardgamegeek.com/wiki/page/Hive_FAQ#toc7)
             this.advanceTurn();
             return { status: "Success", turnType: "Pass" };
         }
 
         // perform placement / movement
-        const pos = this.getAbsolutePos(turn.destination);
+        const pos = this.relToAbs(turn.destination);
         if (!this.piecePositions.getPiece(turn.piece)) return this.placePiece(turn.piece, pos);
         else return this.movePiece(turn.piece, pos);
     }

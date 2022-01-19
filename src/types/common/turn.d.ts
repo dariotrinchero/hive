@@ -27,6 +27,7 @@ export type PlacementErrorMsg = CommonErrorMsg
 export type MovementErrorMsg = CommonErrorMsg
     | `ErrViolates${PieceType}Movement`
     | "ErrQueenUnplayed"
+    | "ErrCovered"
     | "ErrInvalidMovingPiece"
     | "ErrPieceMovedLastTurn"
     | "ErrAlreadyThere";
