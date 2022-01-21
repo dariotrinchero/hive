@@ -13,4 +13,5 @@ board.processTurn("wQ wG1/");
 board.processTurn("bS bB1\\");
 board.processTurn("wB wP-");
 board.processTurn("bB \\bM");
+// board.processTurn("wM wP\\");
 // board.processTurn("wL bQ1-"); // move

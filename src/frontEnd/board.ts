@@ -1,5 +1,5 @@
 import { select, selectAll } from "d3-selection";
-import { easeCubic } from "d3-ease";
+import { easeCubic, easeLinear } from "d3-ease";
 import "d3-transition";
 
 import Notation, { ParseError } from "@/frontEnd/notation";
@@ -8,7 +8,7 @@ import HiveGame from "@/backEnd/game";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { TurnOutcome, TurnRequest } from "@/types/common/turn";
-import type { GroupHandle, ScreenCoords, SelectedPiece, SVGContainer } from "@/types/frontEnd/board";
+import type { MovePaths, ScreenCoords, Sel, SelectedPiece } from "@/types/frontEnd/board";
 import type { LatticeCoords } from "@/types/backEnd/hexGrid";
 
 export default class Board {
@@ -40,6 +40,8 @@ export default class Board {
     };
     private static uiColors = {
         hover: "#e50bbd99",
+        path: "#b80fc755",
+        pillbugPath: "#46a088bb",
         pillbugPlaceholder: "#49ad92bb",
         pillbugPlaceholderHover: "#49ad9277",
         placeholder: "#e50bbd77",
@@ -48,7 +50,7 @@ export default class Board {
     };
 
     private game: HiveGame = new HiveGame();
-    private playArea: GroupHandle;
+    private playArea: Sel<SVGGElement>;
 
     // user-defined dimensions
     private hexRadius: number;
@@ -63,6 +65,8 @@ export default class Board {
     // selection tracking
     private selectedPiece: SelectedPiece = null;
     private placeholderSet: { [pos: string]: boolean; } = {};
+    private movePaths: MovePaths = { normal: () => [], pillbug: () => [] };
+    private movePathHandle: Sel<SVGPathElement>;
 
     // pan & zoom tracking
     private pan: ScreenCoords = [0, 0];
@@ -93,6 +97,23 @@ export default class Board {
         defs.append("path")
             .attr("id", "hex")
             .attr("d", Board.roundedHexPath(hexRadius, cornerRad));
+        Board.definePlaceholder(defs, 0.6 * hexRadGap);
+
+        // create path object for showing bug movement paths
+        const dashLen: [number, number] = [16, 12];
+        this.movePathHandle = this.playArea.append("path")
+            .style("fill", "none")
+            .style("stroke-width", "8px")
+            .style("stroke-dasharray", dashLen.join(","))
+            .style("pointer-events", "none");
+
+        const animate = () => this.movePathHandle
+            .transition()
+            .ease(easeLinear)
+            .duration(2000)
+            .styleTween("stroke-dashoffset", () => t => `${t * (dashLen[0] + dashLen[1])}`)
+            .on("end", animate);
+        animate();
 
         // precalculate other dimensions
         const playAreaBBox = svgContainer.node()?.getBoundingClientRect();
@@ -127,13 +148,25 @@ export default class Board {
         return hexPath + "Z"; // close path
     }
 
+    private static definePlaceholder(defs: Sel<SVGDefsElement>, strokeWidth: number): void {
+        const handle = defs.append("g")
+            .attr("id", "placeholder")
+            .style("stroke-width", `${strokeWidth}px`);
+        [0.95, 0.6].forEach((scale, index) => {
+            const outline = handle.append("use")
+                .attr("xlink:href", "#hex")
+                .attr("transform", `scale(${scale})`);
+            if (index === 0) outline.style("stroke-dasharray", "8,4");
+        });
+    }
+
     /**
      * Create event bindings on given SVG container that react to zooming via scroll wheel and panning via
      * clicking and dragging.
      * 
      * @param svgContainer SVG container on which to create bindings
      */
-    private bindPanAndZoom(svgContainer: SVGContainer): void {
+    private bindPanAndZoom(svgContainer: Sel<SVGSVGElement>): void {
         svgContainer.on("mousedown", (e: MouseEvent) => this.dragging ||= e.button <= 1);
         svgContainer.on("mouseup", (e: MouseEvent) => this.dragging &&= e.button > 1);
         svgContainer.on("mouseleave", () => this.dragging = false);
@@ -209,7 +242,7 @@ export default class Board {
             + `translate(-${width / 2 - 2 * strokeWidth},-${height / 2})`);
     }
 
-    private bindTile(piece: Piece, handle: GroupHandle, pos: LatticeCoords): void {
+    private bindTile(piece: Piece, handle: Sel<SVGGElement>, pos: LatticeCoords): void {
         const thisIsSelected = () => this.selectedPiece?.pos[0] === pos[0]
             && this.selectedPiece.pos[1] === pos[1];
         const hex = handle.selectChild("use");
@@ -235,21 +268,29 @@ export default class Board {
             e.stopImmediatePropagation();
 
             if (!this.selectedPiece) {
-                // spawn placeholders
                 const canMove = this.game.checkPieceForMove(piece);
                 let hasLegalMoves = false;
+
+                // spawn regular placeholders
                 if (canMove === "Success") {
-                    for (const dest of this.game.getMoves(piece)) {
-                        this.spawnPlaceholder(dest);
+                    const generator = this.game.generateLegalMoves(piece);
+                    let next = generator.next();
+                    while (!next.done) {
+                        this.spawnPlaceholder(next.value);
                         hasLegalMoves = true;
+                        next = generator.next();
                     }
+                    this.movePaths.normal = next.value;
                 }
+
+                // spawn pillbug special-move placeholders
                 if (canMove === "Success" || canMove === "OnlyByPillbug") {
-                    // TODO spawn special pillbug move placeholders here
-                    for (const dest of this.game.getPillbugMoves(piece)) {
+                    const pillbugMoves = this.game.getPillbugMoves(piece);
+                    for (const dest of pillbugMoves.destinations) {
                         this.spawnPlaceholder(dest, true);
                         hasLegalMoves = true;
                     }
+                    this.movePaths.pillbug = pillbugMoves.pathMap;
                 }
 
                 // select tile if it has legal moves
@@ -271,21 +312,14 @@ export default class Board {
     private spawnPlaceholder(pos: LatticeCoords, pillbug?: boolean): void {
         if (!this.placeholderSet[pos.join(",")]) {
             const [x, y] = this.convertCoordinates(...pos);
-            const handle = this.playArea
-                .append("g")
+            const handle = this.playArea.append("use")
+                .attr("xlink:href", "#placeholder")
                 .attr("class", "placeholder")
                 .style("stroke", Board.uiColors[pillbug ? "pillbugPlaceholder" : "placeholder"])
-                .style("stroke-width", `${0.6 * this.hexRadGap}px`)
                 .style("fill", "#ffffff00")
                 .attr("transform", `translate(${x},${y})`);
-            [0.95, 0.6].forEach((scale, index) => {
-                const outline = handle.append("use")
-                    .attr("xlink:href", "#hex")
-                    .attr("transform", `scale(${scale})`);
-                if (index === 0) outline.style("stroke-dasharray", ("8, 4"));
-            });
 
-            this.bindPlaceholder(pos, handle, pillbug); // bind mouse events
+            this.bindPlaceholder(pos, handle, pillbug);
             this.placeholderSet[pos.join(",")] = true;
         }
     }
@@ -293,13 +327,22 @@ export default class Board {
     private clearPlaceholders(): void {
         selectAll(".placeholder").remove();
         this.placeholderSet = {};
+        this.movePaths = { normal: () => [], pillbug: () => [] };
+        this.movePathHandle.attr("d", "");
     }
 
-    private bindPlaceholder(pos: LatticeCoords, handle: GroupHandle, pillbug?: boolean): void {
+    private bindPlaceholder(pos: LatticeCoords, handle: Sel<SVGUseElement>, pillbug?: boolean): void {
         handle.on("mouseenter", () => {
             if (this.selectedPiece) {
                 handle.style("fill", Board.uiColors[pillbug ? "pillbugPlaceholderHover" : "placeholderHover"]);
                 handle.style("cursor", "pointer");
+
+                const coordMap = (p: LatticeCoords) => this.convertCoordinates(...p).join(",");
+                this.movePathHandle
+                    .raise()
+                    .style("stroke", Board.uiColors[pillbug ? "pillbugPath" : "path"])
+                    .attr("d", `M${coordMap(pos)}L`
+                        + this.movePaths[pillbug ? "pillbug" : "normal"](pos).map(coordMap).join("L"));
             }
         });
 

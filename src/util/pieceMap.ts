@@ -41,5 +41,9 @@ export default class PieceMap<T> {
         record.push(data);
         return record.length;
     }
+
+    public getAllOfColor(color: PieceColor): Record<PieceType, T[]> {
+        return this.record[color];
+    }
 }
 

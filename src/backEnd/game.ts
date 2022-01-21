@@ -16,11 +16,12 @@ import type {
     Inventory,
     LastMoveDestination,
     MovementCheckOutcome,
+    PillbugMoves,
     PlacementCheckOutcome,
     PlacementCount,
     PlayerInventories
 } from "@/types/backEnd/game";
-import type { AdjFunc, Filter } from "@/types/backEnd/graph";
+import type { AdjFunc, Filter, PathMap } from "@/types/backEnd/graph";
 import type { LatticeCoords } from "@/types/backEnd/hexGrid";
 
 export enum Players {
@@ -104,6 +105,20 @@ export default class HiveGame extends HexGrid {
     private isImmobile(pos: LatticeCoords): boolean {
         const oppLastMove = this.movedLastTurn[this.nextTurn()];
         return oppLastMove !== null && HiveGame.eqPos(oppLastMove, pos);
+    }
+
+    /**
+     * Return list of all valid placement spots for the given color.
+     * 
+     * @param color the color to place
+     * @returns list of valid placement locations
+     */
+    public getLegalPlacements(color: PieceColor): LatticeCoords[] {
+        return Object.values(this.piecePositions.getAllOfColor(color))
+            .flat()
+            .flatMap(pos => this.adjCoords(pos))
+            .filter(pos => !this.getAt(pos)
+                && this.adjPieces(pos).every(piece => piece.color === color));
     }
 
     /**
@@ -198,8 +213,8 @@ export default class HiveGame extends HexGrid {
      * 
      * @param pos position from which to find adjacencies
      * @param ignore position which should be treated as containing one fewer piece (eg. position of piece in transit)
-     * @param dismount if true/false, only return moves that specifically dismount/mount the hive;
-     *                 otherwise also return moves walking on top of hive
+     * @param dismount if true/false, only return moves that specifically do/don't dismount the hive;
+     *                 otherwise returns all kind of moves along top of hive
      * @returns adjacent valid mount positions
      */
     private adjMounts(pos: LatticeCoords, ignore?: LatticeCoords, dismount?: boolean): LatticeCoords[] {
@@ -283,53 +298,78 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
-     * Generate all legal moves for given piece starting at given location.
+     * Generate all legal moves for given piece starting at given location. The lazy/online generator
+     * approach is to speed up checking legality of a move, where we can stop generating early upon
+     * finding the move of interest.
      * 
+     * @see checkBugMovement
      * @param piece piece to move
      * @param fromPos location of piece prior to move
      * @param mosqOverride if given piece is a mosquito, treat it as this type instead
-     * @returns a generator which yields all legal moves
+     * @yields legal moves
+     * @returns function mapping each destination to array of intermediate positions (encoding paths taken)
      */
-    public *getMoves(piece: Piece, fromPos?: LatticeCoords, mosqOverride?: PieceType): Generator<LatticeCoords> {
+    public *generateLegalMoves(
+        piece: Piece,
+        fromPos?: LatticeCoords,
+        mosqOverride?: PieceType
+    ): Generator<LatticeCoords, PathMap<LatticeCoords>> {
         fromPos = fromPos || this.piecePositions.getPiece(piece) || undefined;
-        if (!fromPos) return;
+        if (!fromPos) return () => [];
 
+        // construct appropriate move generator for each piece type
+        let generator: Generator<LatticeCoords, PathMap<LatticeCoords>>;
         const type = piece.type === "Mosquito" && mosqOverride ? mosqOverride : piece.type;
+
         if (type === "Mosquito") {
-            if (piece.covering) yield* this.getMoves(piece, fromPos, "Beetle");
-            else {
-                for (const p of this.adjPieces(fromPos)) {
-                    if (p.type !== "Mosquito") yield* this.getMoves(piece, fromPos, p.type);
-                }
-            }
-        } else if (type === "Grasshopper") {
-            for (let i = 0; i < 3; i++) {
-                yield* HiveGame.graphUtils.collect(
-                    fromPos,
-                    (pos) => {
-                        if (!this.getAt(pos)) return [];
-                        const adj = this.adjCoords(pos);
-                        return [adj[i], adj[(i + 3) % 6]];
-                    },
-                    undefined,
-                    (pos, distance) => distance > 1 && !this.getAt(pos)
+            generator = piece.covering
+                // move like beetle while on hive
+                ? this.generateLegalMoves(piece, fromPos, "Beetle")
+
+                // else merge adjacent non-mosquitoes' moves
+                : GraphUtils.mergeGenerators(
+                    ...this.adjPieces(fromPos)
+                        .filter(p => p.type !== "Mosquito")
+                        .map(p => this.generateLegalMoves(piece, fromPos, p.type))
                 );
-            }
-        } else if (type === "Ladybug") {
-            yield* HiveGame.graphUtils.walkNSteps(
+        }
+
+        else if (type === "Grasshopper") {
+            // merge straight-line moves in each of 3 directions
+            generator = GraphUtils.mergeGenerators(
+                ...[0, 1, 2].map(i =>
+                    HiveGame.graphUtils.generatePaths(
+                        fromPos as LatticeCoords,
+                        (pos) => {
+                            if (!this.getAt(pos)) return [];
+                            const adj = this.adjCoords(pos);
+                            return [adj[i], adj[(i + 3) % 6]];
+                        },
+                        undefined,
+                        (pos, distance) => distance > 1 && !this.getAt(pos)
+                    ))
+            );
+        }
+
+        else if (type === "Ladybug") {
+            // walk 3 steps on hive, forcefully dismounting on last step
+            generator = HiveGame.graphUtils.generateLengthNPaths(
                 fromPos,
                 (pos, distance) => this.adjMounts(pos, fromPos, distance === 2),
                 3
             );
-        } else {
+        }
+
+        else {
+            // all other movement can be calculated in single call to generatePaths()
             let maxDist: number | undefined;
-            let filter: Filter<LatticeCoords> | undefined;
+            let isEndpoint: Filter<LatticeCoords> | undefined;
             let adjFunc: AdjFunc<LatticeCoords> = (pos) => this.adjSlideSpaces(pos, fromPos);
 
             if (type === "QueenBee" || type === "Pillbug") {
                 maxDist = 1;
             } else if (type === "Spider") {
-                filter = (_p, distance) => distance === 3;
+                isEndpoint = (_p, distance) => distance === 3;
                 maxDist = 3;
             } else if (type === "Beetle") {
                 adjFunc = (pos) => this.adjMounts(pos, fromPos)
@@ -337,8 +377,17 @@ export default class HiveGame extends HexGrid {
                 maxDist = 1;
             }
 
-            yield* HiveGame.graphUtils.collect(fromPos, adjFunc, maxDist, filter);
+            generator = HiveGame.graphUtils.generatePaths(fromPos, adjFunc, maxDist, isEndpoint);
         }
+
+        // generate moves & return path information
+        let next: IteratorResult<LatticeCoords, PathMap<LatticeCoords>>;
+        next = generator.next();
+        while (!next.done) {
+            yield next.value;
+            next = generator.next();
+        }
+        return next.value;
     }
 
     /**
@@ -347,14 +396,15 @@ export default class HiveGame extends HexGrid {
      * 
      * @param piece piece to move
      * @param fromPos location of piece prior to move
-     * @returns array of legal moves of given piece over some adjacent pillbug
+     * @returns array of legal moves of given piece over some adjacent pillbug, as well as path map
      */
-    public getPillbugMoves(piece: Piece, fromPos?: LatticeCoords): LatticeCoords[] {
+    public getPillbugMoves(piece: Piece, fromPos?: LatticeCoords): PillbugMoves {
+        const emptyResult: PillbugMoves = { destinations: [], pathMap: () => [] };
         fromPos = fromPos || this.piecePositions.getPiece(piece) || undefined;
-        if (!fromPos) return [];
+        if (!fromPos) return emptyResult;
 
         // may not affect stacked pieces
-        if (piece.covering) return [];
+        if (piece.covering) return emptyResult;
 
         // find adjacent non-immobilized pillbug / mosquito of current turn colour
         const pillbugPositions = this.adjPieceCoords(fromPos).filter(adjPos => {
@@ -375,8 +425,14 @@ export default class HiveGame extends HexGrid {
         const mountablePillbugs = pillbugPositions.filter(mountable);
 
         // return dismount points from all mountable pillbugs
-        return mountablePillbugs.flatMap(pillbugPos =>
+        const destinations: LatticeCoords[][] = mountablePillbugs.map(pillbugPos =>
             this.adjMounts(pillbugPos, fromPos, true));
+        const pathMap: PathMap<LatticeCoords> = (vertex: LatticeCoords) => {
+            const index = destinations.findIndex(list => list.some(pos => HiveGame.eqPos(pos, vertex)));
+            if (index < 0) return [];
+            return [mountablePillbugs[index], fromPos as LatticeCoords];
+        };
+        return { destinations: destinations.flat(), pathMap };
     }
 
     /**
@@ -389,8 +445,11 @@ export default class HiveGame extends HexGrid {
      * @returns whether move is consistent with piece's specific movement patterns
      */
     private checkBugMovement(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
-        for (const pos of this.getMoves(piece, fromPos)) {
-            if (HiveGame.eqPos(pos, toPos)) return true;
+        const generator = this.generateLegalMoves(piece, fromPos);
+        let next = generator.next();
+        while (!next.done) {
+            if (HiveGame.eqPos(next.value, toPos)) return true;
+            next = generator.next();
         }
         return false;
     }
@@ -405,7 +464,7 @@ export default class HiveGame extends HexGrid {
      */
     private checkMove(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords): MovementCheckOutcome {
         const pieceCanMove = this.checkPieceForMove(piece, fromPos);
-        const validPillbugMove = this.getPillbugMoves(piece, fromPos)
+        const validPillbugMove = this.getPillbugMoves(piece, fromPos).destinations
             .some(pos => HiveGame.eqPos(pos, toPos));
 
         // check that piece can move at all

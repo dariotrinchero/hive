@@ -55,7 +55,7 @@ export default class HexGrid {
 
     public adjPieceCoords(pos: LatticeCoords, ignore?: LatticeCoords): LatticeCoords[] {
         return this.adjCoords(pos).filter(pos =>
-            this.getAt(pos) !== null && !(ignore && HexGrid.eqPos(pos, ignore)));
+            this.getAt(pos) && !(ignore && HexGrid.eqPos(pos, ignore)));
     }
 
     public adjPieces(pos: LatticeCoords): Piece[] {

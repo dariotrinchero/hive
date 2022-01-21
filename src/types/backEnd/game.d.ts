@@ -1,6 +1,7 @@
 import type { PieceColor, PieceType } from "@/types/common/piece";
 import type { MovementErrorMsg, PlacementErrorMsg } from "@/types/common/turn";
 import type { LatticeCoords } from "@/types/backEnd/hexGrid";
+import type { PathMap } from "@/types/backEnd/graph";
 
 // player trackers
 export type Inventory = Record<PieceType, number>;
@@ -16,3 +17,9 @@ export type GameStatus = "Ongoing" | "BlackWin" | "WhiteWin" | "Draw";
 // turn check outcomes
 export type PlacementCheckOutcome = "Success" | PlacementErrorMsg;
 export type MovementCheckOutcome = "Success" | "OnlyByPillbug" | MovementErrorMsg;
+
+// pillbug moves
+export interface PillbugMoves {
+    destinations: LatticeCoords[];
+    pathMap: PathMap<LatticeCoords>;
+}

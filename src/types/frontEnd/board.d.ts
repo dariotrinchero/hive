@@ -1,11 +1,10 @@
-import type { Selection } from "d3-selection";
+import type { BaseType, Selection } from "d3-selection";
 
 import type { Piece } from "@/types/common/piece";
 import type { LatticeCoords } from "@/types/backEnd/hexGrid";
+import type { PathMap } from "@/types/backEnd/graph";
 
-// SVG element handles
-export type SVGContainer = Selection<SVGSVGElement, unknown, HTMLElement, unknown>;
-export type GroupHandle = Selection<SVGGElement, unknown, HTMLElement, unknown>;
+export type Sel<T extends BaseType> = Selection<T, unknown, HTMLElement, unknown>; // shorter form for selection types
 
 export type SelectedPiece = null | {
     piece: Piece;
@@ -13,3 +12,8 @@ export type SelectedPiece = null | {
 }
 
 export type ScreenCoords = [number, number];
+
+export interface MovePaths {
+    normal: PathMap<LatticeCoords>;
+    pillbug: PathMap<LatticeCoords>;
+}
