@@ -2,14 +2,14 @@ import { select, selectAll } from "d3-selection";
 import { easeCubic, easeLinear } from "d3-ease";
 import "d3-transition";
 
-import Notation, { ParseError } from "@/frontEnd/notation";
-import * as icons from "@/frontEnd/icons.json";
-import HiveGame from "@/backEnd/game";
+import Notation, { ParseError } from "@/client/ui/notation";
+import * as icons from "@/client/ui/icons.json";
+import HiveGame from "@/server/game/game";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { TurnOutcome, TurnRequest } from "@/types/common/turn";
-import type { MovePaths, ScreenCoords, Sel, SelectedPiece } from "@/types/frontEnd/board";
-import type { LatticeCoords } from "@/types/backEnd/hexGrid";
+import type { MovePaths, ScreenCoords, Sel, SelectedPiece } from "@/types/client/board";
+import type { LatticeCoords } from "@/types/server/hexGrid";
 
 export default class Board {
     // static lookup-tables

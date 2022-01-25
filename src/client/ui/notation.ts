@@ -1,8 +1,8 @@
-import HiveGame, { Bugs, Players } from "@/backEnd/game";
+import HiveGame, { Bugs, Players } from "@/server/game/game";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { TurnRequest } from "@/types/common/turn";
-import type { Direction } from "@/types/backEnd/hexGrid";
+import type { Direction } from "@/types/server/hexGrid";
 
 export type ParseError = "ParseError";
 

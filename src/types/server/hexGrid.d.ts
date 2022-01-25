@@ -1,5 +1,5 @@
 import type { Piece } from "@/types/common/piece";
-import { PlanarDirection } from "@/backEnd/hexGrid";
+import { PlanarDirection } from "@/server/game/hexGrid";
 
 // absolute grid positioning
 export type LatticeCoords = [number, number];

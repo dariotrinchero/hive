@@ -1,6 +1,6 @@
-import PieceMap from "@/util/pieceMap";
-import GraphUtils from "@/backEnd/graph";
-import HexGrid from "@/backEnd/hexGrid";
+import PieceMap from "@/server/game/pieceMap";
+import GraphUtils from "@/server/game/graph";
+import HexGrid from "@/server/game/hexGrid";
 
 import type {
     MovementError,
@@ -20,9 +20,9 @@ import type {
     PlacementCheckOutcome,
     PlacementCount,
     PlayerInventories
-} from "@/types/backEnd/game";
-import type { AdjFunc, Filter, PathMap } from "@/types/backEnd/graph";
-import type { LatticeCoords } from "@/types/backEnd/hexGrid";
+} from "@/types/server/game";
+import type { AdjFunc, Filter, PathMap } from "@/types/server/graph";
+import type { LatticeCoords } from "@/types/server/hexGrid";
 
 export enum Players {
     "Black",

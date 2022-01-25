@@ -1,4 +1,4 @@
-import HiveGame, { Bugs } from "@/backEnd/game";
+import HiveGame, { Bugs } from "@/server/game/game";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 

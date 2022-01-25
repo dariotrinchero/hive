@@ -1,4 +1,4 @@
-import { Bugs, Players } from "@/backEnd/game";
+import { Bugs, Players } from "@/server/game/game";
 
 export type PieceColor = keyof typeof Players;
 

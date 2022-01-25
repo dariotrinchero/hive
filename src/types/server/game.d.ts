@@ -1,7 +1,7 @@
 import type { PieceColor, PieceType } from "@/types/common/piece";
 import type { MovementErrorMsg, PlacementErrorMsg } from "@/types/common/turn";
-import type { LatticeCoords } from "@/types/backEnd/hexGrid";
-import type { PathMap } from "@/types/backEnd/graph";
+import type { LatticeCoords } from "@/types/server/hexGrid";
+import type { PathMap } from "@/types/server/graph";
 
 // player trackers
 export type Inventory = Record<PieceType, number>;
