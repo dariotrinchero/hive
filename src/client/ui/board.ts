@@ -2,6 +2,7 @@ import { select, selectAll } from "d3-selection";
 import { easeCubic, easeLinear } from "d3-ease";
 import "d3-transition";
 
+import type GameClient from "@/client/gameClient";
 import Notation, { ParseError } from "@/client/ui/notation";
 import * as icons from "@/client/ui/icons.json";
 import HiveGame from "@/server/game/game";
@@ -51,6 +52,7 @@ export default class Board {
 
     private game: HiveGame = new HiveGame();
     private playArea: Sel<SVGGElement>;
+    private gameClient: GameClient;
 
     // user-defined dimensions
     private hexRadius: number;
@@ -73,8 +75,9 @@ export default class Board {
     private dragging = false;
     private zoom = 1;
 
-    public constructor(hexRadius: number, cornerRad: number, hexRadGap: number) {
-        // set user-defined dimensions
+    public constructor(gameClient: GameClient, hexRadius: number, cornerRad: number, hexRadGap: number) {
+        // set user-defined fields
+        this.gameClient = gameClient;
         this.hexRadius = hexRadius;
         this.hexRadGap = hexRadGap;
 
@@ -195,23 +198,31 @@ export default class Board {
         });
     }
 
-    public processTurn(turn: TurnRequest): TurnOutcome;
-    public processTurn(turnNotation: string): TurnOutcome | ParseError;
-    public processTurn(turnOrNotation: string | TurnRequest): TurnOutcome | ParseError {
-        let turn: TurnRequest | ParseError;
-        if (typeof turnOrNotation === "string") {
-            turn = Notation.stringToTurnRequest(turnOrNotation);
-            if (turn === "ParseError") return "ParseError";
-        } else turn = turnOrNotation;
+    public async processTurn(...turn: TurnRequest[]): Promise<TurnOutcome[]>;
+    public async processTurn(...turnNotation: string[]): Promise<(TurnOutcome | ParseError)[]>;
+    public async processTurn(...turnOrNotation: string[] | TurnRequest[]): Promise<(TurnOutcome | ParseError)[]> {
+        const result: (TurnOutcome | ParseError)[] = [];
+        for (const tON of turnOrNotation) {
+            let turn: TurnRequest | ParseError;
+            if (typeof tON === "string") {
+                turn = Notation.stringToTurnRequest(tON);
+                if (turn === "ParseError") {
+                    result.push("ParseError");
+                    continue;
+                }
+            } else turn = tON;
 
-        const outcome: TurnOutcome = this.game.processTurn(turn);
-        if (outcome.status === "Success") {
-            if (outcome.turnType === "Placement") this.spawnTile(outcome.piece, outcome.destination);
-            else if (outcome.turnType === "Movement") this.moveTile(outcome.piece, outcome.destination);
+            const outcome: TurnOutcome = await this.gameClient.makeTurnRequest(turn);
+            if (outcome.status === "Success") {
+                this.game.processTurn(turn); // TODO this could be removed?
+                if (outcome.turnType === "Placement") this.spawnTile(outcome.piece, outcome.destination);
+                else if (outcome.turnType === "Movement") this.moveTile(outcome.piece, outcome.destination);
+            }
+
+            console.log(outcome);
+            result.push(outcome);
         }
-
-        console.log(outcome);
-        return outcome;
+        return result;
     }
 
     private spawnTile(piece: Piece, pos: LatticeCoords): void {
@@ -298,7 +309,18 @@ export default class Board {
                     this.selectedPiece = { piece, pos };
                     hex.style("stroke", Board.uiColors.selected);
                 } else {
-                    // TODO handle clicking of piece with no legal moves
+                    // handle clicking of piece with no legal moves
+                    const transform = handle.attr("transform");
+                    let shakes = 3;
+                    const animate = () => {
+                        if (shakes-- > 0) handle.transition()
+                            .duration(90)
+                            .attrTween("transform", () => t => `${transform} rotate(${5.5 * Math.sin(t * Math.PI)})`)
+                            .on("end", animate);
+                        else handle.attr("transform", transform);
+                    };
+                    if (!transform.match(/rotate/g)) animate();
+
                     console.error(`No legal moves: pieceMayMove() returned ${canMove}`);
                 }
             } else if (thisIsSelected()) {

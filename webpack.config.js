@@ -30,7 +30,7 @@ module.exports = (_env, args) => {
             hot: false,
             port: 3000,
             proxy: {
-                '/api': {
+                '/socket.io': {
                     target: 'ws://localhost:3001',
                     ws: true,
                     secure: false
