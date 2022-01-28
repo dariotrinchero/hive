@@ -1,17 +1,14 @@
-import type { PieceColor, PieceType } from "@/types/common/piece";
+import type { Inventory, PieceColor } from "@/types/common/piece";
 import type { MovementErrorMsg, PlacementErrorMsg } from "@/types/common/turn";
-import type { LatticeCoords } from "@/types/server/hexGrid";
-import type { PathMap } from "@/types/server/graph";
+import type { LatticeCoords } from "@/types/common/game/hexGrid";
+import type { PathMap } from "@/types/common/game/graph";
 
-// player trackers
-export type Inventory = Record<PieceType, number>;
-export type PlayerInventories = Record<PieceColor, Inventory>;
-
+// game state
 export type LastMoveDestination = Record<PieceColor, LatticeCoords | null>;
 
+// trackers inferable from game state
+export type PlayerInventories = Record<PieceColor, Inventory>;
 export type PlacementCount = Record<PieceColor, number>;
-
-// game trackers
 export type GameStatus = "Ongoing" | "BlackWin" | "WhiteWin" | "Draw";
 
 // turn check outcomes

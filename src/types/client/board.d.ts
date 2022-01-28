@@ -1,8 +1,8 @@
 import type { BaseType, Selection } from "d3-selection";
 
 import type { Piece } from "@/types/common/piece";
-import type { LatticeCoords } from "@/types/server/hexGrid";
-import type { PathMap } from "@/types/server/graph";
+import type { LatticeCoords } from "@/types/common/game/hexGrid";
+import type { PathMap } from "@/types/common/game/graph";
 
 export type Sel<T extends BaseType> = Selection<T, unknown, HTMLElement, unknown>; // shorter form for selection types
 

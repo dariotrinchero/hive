@@ -1,6 +1,6 @@
-import PieceMap from "@/server/game/pieceMap";
-import GraphUtils from "@/server/game/graph";
-import HexGrid from "@/server/game/hexGrid";
+import { pieceInventory } from "@/common/piece";
+import GraphUtils from "@/common/game/graph";
+import HexGrid from "@/common/game/hexGrid";
 
 import type {
     MovementError,
@@ -13,62 +13,35 @@ import type {
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type {
     GameStatus,
-    Inventory,
     LastMoveDestination,
     MovementCheckOutcome,
     PillbugMoves,
     PlacementCheckOutcome,
     PlacementCount,
     PlayerInventories
-} from "@/types/server/game";
-import type { AdjFunc, Filter, PathMap } from "@/types/server/graph";
-import type { LatticeCoords } from "@/types/server/hexGrid";
-
-export enum Players {
-    "Black",
-    "White"
-}
-
-export enum Bugs {
-    "Ant",
-    "Beetle",
-    "Grasshopper",
-    "Ladybug",
-    "Mosquito",
-    "Pillbug",
-    "QueenBee",
-    "Spider"
-}
+} from "@/types/common/game/game";
+import type { AdjFunc, Filter, PathMap } from "@/types/common/game/graph";
+import type { LatticeCoords } from "@/types/common/game/hexGrid";
 
 export default class HiveGame extends HexGrid {
-    public static startingInventory: Inventory = {
-        Ant: 3,
-        Beetle: 2,
-        Grasshopper: 3,
-        Ladybug: 1,
-        Mosquito: 1,
-        Pillbug: 1,
-        QueenBee: 1,
-        Spider: 2
-    };
-    private static playSpaceSize = 2 * Object.values(HiveGame.startingInventory)
-        .reduce((a, b) => a + b, 0) + 2; // total pieces plus 2 adjacent spaces
-
     private static graphUtils = new GraphUtils<LatticeCoords>(pos => pos.join(","));
 
-    private playerInventories: PlayerInventories;
-    private placementCount: PlacementCount;
+    // game state
     private turnCount: number;
     private currTurnColor: PieceColor = "Black";
     private movedLastTurn: LastMoveDestination;
+
+    // inferrable from state
+    private placementCount: PlacementCount;
+    private playerInventories: PlayerInventories;
     private gameStatus: GameStatus;
 
     public constructor() {
-        super(HiveGame.playSpaceSize);
+        super();
 
         this.playerInventories = {
-            Black: { ...HiveGame.startingInventory },
-            White: { ...HiveGame.startingInventory }
+            Black: { ...pieceInventory },
+            White: { ...pieceInventory }
         };
         this.movedLastTurn = { Black: null, White: null };
         this.placementCount = { Black: 0, White: 0 };
@@ -82,6 +55,10 @@ export default class HiveGame extends HexGrid {
 
     private nextTurn(): PieceColor {
         return this.currTurnColor === "Black" ? "White" : "Black";
+    }
+
+    public getTurnCount(): number {
+        return this.turnCount;
     }
 
     /**
@@ -114,10 +91,10 @@ export default class HiveGame extends HexGrid {
      * @returns list of valid placement locations
      */
     public getLegalPlacements(color: PieceColor): LatticeCoords[] {
-        return Object.values(this.piecePositions.getAllOfColor(color))
+        return Object.values(this.getAllPosOf(color))
             .flat()
             .flatMap(pos => this.adjCoords(pos))
-            .filter(pos => !this.getAt(pos)
+            .filter(pos => !this.getPieceAt(pos)
                 && this.adjPieces(pos).every(piece => piece.color === color));
     }
 
@@ -135,7 +112,7 @@ export default class HiveGame extends HexGrid {
         // basic immediate rejections
         if (this.gameStatus !== "Ongoing") return "ErrGameOver";
         if (this.currTurnColor !== piece.color) return "ErrOutOfTurn";
-        if (this.getAt(pos) !== null) return "ErrDestinationOccupied";
+        if (this.getPieceAt(pos)) return "ErrDestinationOccupied";
         if (this.adjPieceCoords(pos).length === 0) return "ErrOneHiveRule";
         if (this.playerInventories[piece.color][piece.type] <= 0) return "ErrOutOfPieces";
 
@@ -160,7 +137,7 @@ export default class HiveGame extends HexGrid {
      * @param destination position at which to place
      * @returns discriminated union indicating success or failure with details in each case
      */
-    public placePiece(piece: Piece, destination: LatticeCoords | null): PlacementSuccess | PlacementError {
+    public placePiece(piece: Piece, destination?: LatticeCoords): PlacementSuccess | PlacementError {
         const errorTemplate: PlacementError = {
             message: "ErrInvalidDestination",
             status: "Error",
@@ -173,9 +150,8 @@ export default class HiveGame extends HexGrid {
         if (message !== "Success") return { ...errorTemplate, message };
 
         // spawn piece
-        piece.index = this.piecePositions.addPiece(piece, destination);
+        this.setPos(destination, piece);
         piece.height = 1;
-        this.setAt(destination, piece);
 
         // advance turn
         if (this.turnCount === 0) this.currTurnColor = piece.color;
@@ -198,11 +174,11 @@ export default class HiveGame extends HexGrid {
             const gatePos = [5, 1].map(d => arr[(i + d) % 6]);
             const shouldIgnore = (adjPos: LatticeCoords) => ignore && HiveGame.eqPos(adjPos, ignore);
 
-            let validSlide: boolean | undefined = this.getAt(adjPos) === null;
-            if (!this.getAt(gatePos[0]) || shouldIgnore(gatePos[0])) {
-                validSlide &&= this.getAt(gatePos[1]) !== null && !shouldIgnore(gatePos[1]);
+            let validSlide: boolean | undefined = !this.getPieceAt(adjPos);
+            if (!this.getPieceAt(gatePos[0]) || shouldIgnore(gatePos[0])) {
+                validSlide &&= this.getPieceAt(gatePos[1]) && !shouldIgnore(gatePos[1]);
             } else {
-                validSlide &&= this.getAt(gatePos[1]) === null || shouldIgnore(gatePos[1]);
+                validSlide &&= !this.getPieceAt(gatePos[1]) || shouldIgnore(gatePos[1]);
             }
             return validSlide;
         });
@@ -218,19 +194,19 @@ export default class HiveGame extends HexGrid {
      * @returns adjacent valid mount positions
      */
     private adjMounts(pos: LatticeCoords, ignore?: LatticeCoords, dismount?: boolean): LatticeCoords[] {
-        let height = this.getAt(pos)?.height || 0;
+        let height = this.getPieceAt(pos)?.height || 0;
         if (ignore && HiveGame.eqPos(pos, ignore)) height -= 1;
 
         return this.adjCoords(pos).filter((adjPos, i, arr) => {
             if (ignore && HiveGame.eqPos(adjPos, ignore)) return false;
 
-            const gateHeights = [5, 1].map(d => this.getAt(arr[(i + d) % 6])?.height || 0);
-            const destination = this.getAt(adjPos);
+            const gateHeights = [5, 1].map(d => this.getPieceAt(arr[(i + d) % 6])?.height || 0);
+            const destination = this.getPieceAt(adjPos);
 
-            let validMount = Math.min(...gateHeights) <= Math.max(height, destination?.height || 0);
+            let validMount: boolean | undefined = Math.min(...gateHeights) <= Math.max(height, destination?.height || 0);
             if (dismount === true) validMount &&= !destination;
-            else if (dismount === false) validMount &&= destination !== null;
-            else validMount &&= (destination !== null || height >= 1);
+            else if (dismount === false) validMount &&= typeof destination !== "undefined";
+            else validMount &&= typeof destination !== "undefined" || height >= 1;
             return validMount;
         });
     }
@@ -251,12 +227,12 @@ export default class HiveGame extends HexGrid {
         let groupsSeen = 0;
         const adjacent: LatticeCoords[] = this.adjCoords(fromPos);
         adjacent.forEach(pos => {
-            if (this.getAt(pos) !== null) {
+            if (this.getPieceAt(pos)) {
                 if (lastSeenSpace) groupsSeen++;
                 lastSeenSpace = false;
             } else lastSeenSpace = true;
         });
-        if (!lastSeenSpace && this.getAt(adjacent[0]) !== null) groupsSeen--; // if we began in connected group
+        if (!lastSeenSpace && this.getPieceAt(adjacent[0])) groupsSeen--; // if we began in connected group
         if (groupsSeen === 1) return true;
 
         // reject if removing piece from original location disconnects 
@@ -280,11 +256,11 @@ export default class HiveGame extends HexGrid {
         if (this.playerInventories[this.currTurnColor].QueenBee === 1) return "ErrQueenUnplayed";
 
         // get position of piece & check that piece is actually there
-        fromPos = fromPos || this.piecePositions.getPiece(piece) || undefined;
+        fromPos = fromPos || this.getPosOf(piece);
         if (!fromPos) return "ErrInvalidMovingPiece";
-        const pieceAtFromPos = this.getAt(fromPos);
+        const pieceAtFromPos = this.getPieceAt(fromPos);
         if (!pieceAtFromPos) return "ErrInvalidMovingPiece";
-        if (!PieceMap.equalPiece(piece, pieceAtFromPos)) return "ErrCovered";
+        if (!HiveGame.eqPiece(piece, pieceAtFromPos)) return "ErrCovered";
 
         // populate piece with covering info
         piece.covering = pieceAtFromPos.covering;
@@ -314,7 +290,7 @@ export default class HiveGame extends HexGrid {
         fromPos?: LatticeCoords,
         mosqOverride?: PieceType
     ): Generator<LatticeCoords, PathMap<LatticeCoords>> {
-        fromPos = fromPos || this.piecePositions.getPiece(piece) || undefined;
+        fromPos = fromPos || this.getPosOf(piece);
         if (!fromPos) return () => [];
 
         // construct appropriate move generator for each piece type
@@ -341,12 +317,12 @@ export default class HiveGame extends HexGrid {
                     HiveGame.graphUtils.generatePaths(
                         fromPos as LatticeCoords,
                         (pos) => {
-                            if (!this.getAt(pos)) return [];
+                            if (!this.getPieceAt(pos)) return [];
                             const adj = this.adjCoords(pos);
                             return [adj[i], adj[(i + 3) % 6]];
                         },
                         undefined,
-                        (pos, distance) => distance > 1 && !this.getAt(pos)
+                        (pos, distance) => distance > 1 && !this.getPieceAt(pos)
                     ))
             );
         }
@@ -400,7 +376,7 @@ export default class HiveGame extends HexGrid {
      */
     public getPillbugMoves(piece: Piece, fromPos?: LatticeCoords): PillbugMoves {
         const emptyResult: PillbugMoves = { destinations: [], pathMap: () => [] };
-        fromPos = fromPos || this.piecePositions.getPiece(piece) || undefined;
+        fromPos = fromPos || this.getPosOf(piece);
         if (!fromPos) return emptyResult;
 
         // may not affect stacked pieces
@@ -410,7 +386,7 @@ export default class HiveGame extends HexGrid {
         const pillbugPositions = this.adjPieceCoords(fromPos).filter(adjPos => {
             if (this.isImmobile(adjPos)) return false;
 
-            const adjPiece = this.getAt(adjPos);
+            const adjPiece = this.getPieceAt(adjPos);
             if (adjPiece?.color !== this.currTurnColor) return false;
 
             return adjPiece.type === "Pillbug"
@@ -475,7 +451,7 @@ export default class HiveGame extends HexGrid {
         // check that destination is valid
         if (HiveGame.eqPos(fromPos, toPos)) return "ErrAlreadyThere";
         if (this.adjPieceCoords(toPos, piece.covering ? undefined : fromPos).length === 0) return "ErrOneHiveRule";
-        if (this.getAt(toPos) && piece.type !== "Beetle" && piece.type !== "Mosquito") return "ErrDestinationOccupied";
+        if (this.getPieceAt(toPos) && piece.type !== "Beetle" && piece.type !== "Mosquito") return "ErrDestinationOccupied";
         if (!validPillbugMove && !this.checkBugMovement(piece, fromPos, toPos)) return `ErrViolates${piece.type}Movement`;
 
         return pieceCanMove;
@@ -488,7 +464,7 @@ export default class HiveGame extends HexGrid {
      * @param destination destination of move
      * @returns discriminated union indicating success or failure with details in each case
      */
-    public movePiece(piece: Piece, destination: LatticeCoords | null): MovementSuccess | MovementError {
+    public movePiece(piece: Piece, destination?: LatticeCoords): MovementSuccess | MovementError {
         const errorTemplate: MovementError = {
             message: "ErrInvalidDestination",
             status: "Error",
@@ -497,19 +473,18 @@ export default class HiveGame extends HexGrid {
 
         // report any movement errors
         if (!destination) return errorTemplate;
-        const fromPos = this.piecePositions.getPiece(piece);
+        const fromPos = this.getPosOf(piece);
         if (!fromPos) return { ...errorTemplate, message: "ErrInvalidMovingPiece" };
         const message = this.checkMove(piece, fromPos, destination);
         if (message !== "Success" && message !== "OnlyByPillbug") return { ...errorTemplate, message };
 
-        // handle covered pieces in old and/or new locations
-        this.setAt(fromPos, piece.covering || null);
-        piece.covering = this.getAt(destination) || undefined;
+        // update covering info
+        this.setPos(fromPos, piece.covering);
+        piece.covering = this.getPieceAt(destination);
         piece.height = 1 + (piece.covering?.height || 0);
 
         // move piece & advance turn
-        this.setAt(destination, piece);
-        this.piecePositions.setPiece(piece, destination);
+        this.setPos(destination, piece);
         this.advanceTurn(destination);
 
         return { destination, piece, status: "Success", turnType: "Movement" };
@@ -530,7 +505,7 @@ export default class HiveGame extends HexGrid {
 
         // perform placement / movement
         const pos = this.relToAbs(turn.destination);
-        if (!this.piecePositions.getPiece(turn.piece)) return this.placePiece(turn.piece, pos);
+        if (!this.getPosOf(turn.piece)) return this.placePiece(turn.piece, pos);
         else return this.movePiece(turn.piece, pos);
     }
 
@@ -540,8 +515,8 @@ export default class HiveGame extends HexGrid {
      * @returns whether game is ongoing; otherwise outcome of game
      */
     public checkGameStatus(): GameStatus {
-        const blackBeePos = this.piecePositions.getPiece({ color: "Black", index: 1, type: "QueenBee" });
-        const whiteBeePos = this.piecePositions.getPiece({ color: "White", index: 1, type: "QueenBee" });
+        const blackBeePos = this.getPosOf({ color: "Black", index: 1, type: "QueenBee" });
+        const whiteBeePos = this.getPosOf({ color: "White", index: 1, type: "QueenBee" });
         if (!blackBeePos || !whiteBeePos) return "Ongoing";
 
         const blackSurrounded: boolean = this.adjPieceCoords(blackBeePos).length === 6;

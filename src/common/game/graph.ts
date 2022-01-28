@@ -1,4 +1,4 @@
-import type { AdjFunc, BFSResults, EdgeTo, Filter, PathMap, Stringify } from "@/types/server/graph";
+import type { AdjFunc, BFSResults, EdgeTo, Filter, PathMap, Stringify } from "@/types/common/game/graph";
 
 export default class GraphUtils<V> {
     private stringify: Stringify<V>;

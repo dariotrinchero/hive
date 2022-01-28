@@ -2,15 +2,16 @@ import { select, selectAll } from "d3-selection";
 import { easeCubic, easeLinear } from "d3-ease";
 import "d3-transition";
 
-import type GameClient from "@/client/gameClient";
+import type GameClient from "@/client/sockets/gameClient";
 import Notation, { ParseError } from "@/client/ui/notation";
 import * as icons from "@/client/ui/icons.json";
-import HiveGame from "@/server/game/game";
+import HiveGame from "@/common/game/game";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { TurnOutcome, TurnRequest } from "@/types/common/turn";
+import type { LatticeCoords } from "@/types/common/game/hexGrid";
 import type { MovePaths, ScreenCoords, Sel, SelectedPiece } from "@/types/client/board";
-import type { LatticeCoords } from "@/types/server/hexGrid";
+import type { TurnEventOutcome } from "@/types/server/gameServer";
 
 export default class Board {
     // static lookup-tables
@@ -65,6 +66,7 @@ export default class Board {
     private vertSpacing: number;
 
     // selection tracking
+    private interactable = true;
     private selectedPiece: SelectedPiece = null;
     private placeholderSet: { [pos: string]: boolean; } = {};
     private movePaths: MovePaths = { normal: () => [], pillbug: () => [] };
@@ -75,7 +77,12 @@ export default class Board {
     private dragging = false;
     private zoom = 1;
 
-    public constructor(gameClient: GameClient, hexRadius: number, cornerRad: number, hexRadGap: number) {
+    public constructor(
+        gameClient: GameClient,
+        hexRadius: number,
+        cornerRad: number,
+        hexRadGap: number,
+    ) {
         // set user-defined fields
         this.gameClient = gameClient;
         this.hexRadius = hexRadius;
@@ -198,10 +205,15 @@ export default class Board {
         });
     }
 
+    public setInteractable(interactable: boolean): void {
+        this.interactable = interactable;
+        if (!interactable) this.clearPlaceholders();
+    }
+
     public async processTurn(...turn: TurnRequest[]): Promise<TurnOutcome[]>;
     public async processTurn(...turnNotation: string[]): Promise<(TurnOutcome | ParseError)[]>;
-    public async processTurn(...turnOrNotation: string[] | TurnRequest[]): Promise<(TurnOutcome | ParseError)[]> {
-        const result: (TurnOutcome | ParseError)[] = [];
+    public async processTurn(...turnOrNotation: string[] | TurnRequest[]): Promise<(TurnEventOutcome | ParseError)[]> {
+        const result: (TurnEventOutcome | ParseError)[] = [];
         for (const tON of turnOrNotation) {
             let turn: TurnRequest | ParseError;
             if (typeof tON === "string") {
@@ -212,7 +224,7 @@ export default class Board {
                 }
             } else turn = tON;
 
-            const outcome: TurnOutcome = await this.gameClient.makeTurnRequest(turn);
+            const outcome: TurnEventOutcome = await this.gameClient.makeTurnRequest(turn);
             if (outcome.status === "Success") {
                 this.game.processTurn(turn); // TODO this could be removed?
                 if (outcome.turnType === "Placement") this.spawnTile(outcome.piece, outcome.destination);
@@ -236,7 +248,7 @@ export default class Board {
             .attr("xlink:href", "#hex")
             .style("fill", Board.tileColorMap[piece.color])
             .style("stroke-width", `${this.hexRadGap * Math.sqrt(3)}px`);
-        this.bindTile(piece, handle, pos); // bind mouse events
+        if (this.interactable) this.bindTile(piece, handle, pos); // bind mouse events
 
         // add centered bug icon
         const strokeWidth = piece.type === "Pillbug" ? 1 : 0;
@@ -341,7 +353,7 @@ export default class Board {
                 .style("fill", "#ffffff00")
                 .attr("transform", `translate(${x},${y})`);
 
-            this.bindPlaceholder(pos, handle, pillbug);
+            if (this.interactable) this.bindPlaceholder(pos, handle, pillbug);
             this.placeholderSet[pos.join(",")] = true;
         }
     }
@@ -376,23 +388,23 @@ export default class Board {
         handle.on("mousedown", (e: MouseEvent) => e.stopImmediatePropagation());
         handle.on("mouseup", () => {
             if (this.selectedPiece) {
-                this.checkThenMoveTile(this.selectedPiece.piece, pos);
+                this.moveTile(this.selectedPiece.piece, pos, true);
                 this.selectedPiece = null;
                 this.clearPlaceholders();
             }
         });
     }
 
-    private checkThenMoveTile(piece: Piece, destination: LatticeCoords) {
-        const outcome = this.game.movePiece(piece, destination);
-        console.log(outcome);
-        if (outcome.status === "Success") this.moveTile(piece, destination);
-    }
+    private moveTile(piece: Piece, destination: LatticeCoords, checkFirst?: boolean): void {
+        if (checkFirst) {
+            const outcome = this.game.movePiece(piece, destination);
+            console.log(outcome);
+            if (outcome.status !== "Success") return;
+        }
 
-    private moveTile(piece: Piece, destination: LatticeCoords): void {
         let [x, y] = this.convertCoordinates(...destination);
         if (piece.height && piece.height > 1) {
-            // TODO show this better
+            // TODO render this better
             x += this.hexRadGap * (piece.height - 1);
             y -= this.hexRadGap * (piece.height - 1);
         }

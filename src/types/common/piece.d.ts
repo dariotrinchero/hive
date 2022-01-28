@@ -1,8 +1,10 @@
-import { Bugs, Players } from "@/server/game/game";
+import type { Bugs, Colors } from "@/common/piece";
 
-export type PieceColor = keyof typeof Players;
+export type PieceColor = keyof typeof Colors;
 
 export type PieceType = keyof typeof Bugs;
+
+export type Inventory = Record<PieceType, number>;
 
 export interface Piece {
     type: PieceType;

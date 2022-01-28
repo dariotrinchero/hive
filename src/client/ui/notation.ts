@@ -1,8 +1,9 @@
-import HiveGame, { Bugs, Players } from "@/server/game/game";
+import { pieceInventory } from "@/common/piece";
+import { Bugs, Colors } from "@/common/piece";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { TurnRequest } from "@/types/common/turn";
-import type { Direction } from "@/types/server/hexGrid";
+import type { Direction } from "@/types/common/game/hexGrid";
 
 export type ParseError = "ParseError";
 
@@ -16,7 +17,7 @@ export default class Notation {
     }
 
     private static charToPieceColor(char: string): PieceColor | ParseError {
-        const colors: string[] = Object.keys(Players);
+        const colors: string[] = Object.keys(Colors);
         const color = colors.slice(-colors.length / 2) // first 1/2 of keys are indices
             .find(c => c.charAt(0).toLowerCase() === char);
         if (!color) return "ParseError";
@@ -33,7 +34,7 @@ export default class Notation {
 
         if (notation.length >= 3) {
             const index = parseInt(notation.slice(2));
-            if (isNaN(index) || HiveGame.startingInventory[type] < index) return "ParseError";
+            if (isNaN(index) || pieceInventory[type] < index) return "ParseError";
             return { color, index, type };
         }
 
@@ -42,7 +43,7 @@ export default class Notation {
 
     public static pieceToString(piece: Piece): string {
         const prefix = `${piece.color.charAt(0).toLowerCase()}${piece.type.charAt(0)}`;
-        if (piece.index && HiveGame.startingInventory[piece.type] !== 1) return `${prefix}${piece.index}`;
+        if (piece.index && pieceInventory[piece.type] !== 1) return `${prefix}${piece.index}`;
         return prefix;
     }
 

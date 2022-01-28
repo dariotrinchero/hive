@@ -1,4 +1,4 @@
-const { default: HiveGame } = require("@/server/game/game");
+const { default: HiveGame } = require("@/common/game/game");
 const { default: Notation } = require("@/client/ui/notation");
 
 let game = null;
@@ -84,7 +84,7 @@ describe("When new piece is placed", () => {
         expectError("bG wG1-", "ErrDestinationOccupied");
     });
 
-    it("rejects if destination is does not exist", () => {
+    it("rejects if destination does not exist", () => {
         expectSuccess("bB .");
         expectError("wG bB2-", "ErrInvalidDestination");
     });
