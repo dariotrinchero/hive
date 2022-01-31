@@ -4,13 +4,15 @@ import HexGrid from "@/common/game/hexGrid";
 
 import type {
     MovementError,
-    MovementSuccess,
+    MovementOutcome,
+    PassSuccess,
     PlacementError,
-    PlacementSuccess,
+    PlacementOutcome,
     TurnOutcome,
     TurnRequest
 } from "@/types/common/turn";
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
+import type { GameState } from "@/types/common/socket";
 import type {
     GameStatus,
     LastMoveDestination,
@@ -20,7 +22,7 @@ import type {
     PlacementCount,
     PlayerInventories
 } from "@/types/common/game/game";
-import type { AdjFunc, Filter, PathMap } from "@/types/common/game/graph";
+import type { BFSAdj, Filter, PathMap } from "@/types/common/game/graph";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
 
 export default class HiveGame extends HexGrid {
@@ -38,7 +40,6 @@ export default class HiveGame extends HexGrid {
 
     public constructor() {
         super();
-
         this.playerInventories = {
             Black: { ...pieceInventory },
             White: { ...pieceInventory }
@@ -49,11 +50,43 @@ export default class HiveGame extends HexGrid {
         this.gameStatus = "Ongoing";
     }
 
-    public currTurn(): PieceColor {
+    public static fromState(state: GameState): HiveGame {
+        const game = new HiveGame();
+        game.turnCount = state.turnCount;
+        game.currTurnColor = state.currTurnColor;
+        game.movedLastTurn = state.movedLastTurn;
+        game.posToPiece = state.posToPiece;
+
+        // infer other game state variables
+        Object.entries(game.posToPiece).forEach(([posStr, piece]) => {
+            const pos = posStr.split(",").map(str => parseInt(str)) as LatticeCoords;
+            const recordPiece = (currPiece: Piece) => {
+                if (currPiece.covering) recordPiece(currPiece.covering);
+                game.setPos(pos, currPiece);
+                game.placementCount[currPiece.color]++;
+                game.playerInventories[currPiece.color][currPiece.type]--;
+            };
+            recordPiece(piece);
+        });
+
+        game.gameStatus = game.checkGameStatus();
+        return game;
+    }
+
+    public getState(): GameState {
+        return {
+            currTurnColor: this.currTurnColor,
+            movedLastTurn: this.movedLastTurn,
+            posToPiece: this.posToPiece,
+            turnCount: this.turnCount
+        };
+    }
+
+    public getCurrTurnColor(): PieceColor {
         return this.currTurnColor;
     }
 
-    private nextTurn(): PieceColor {
+    private getNextTurnColor(): PieceColor {
         return this.currTurnColor === "Black" ? "White" : "Black";
     }
 
@@ -69,7 +102,7 @@ export default class HiveGame extends HexGrid {
     private advanceTurn(moveDest?: LatticeCoords): void {
         this.turnCount++;
         this.movedLastTurn[this.currTurnColor] = moveDest || null;
-        this.currTurnColor = this.nextTurn();
+        this.currTurnColor = this.getNextTurnColor();
         this.gameStatus = this.checkGameStatus();
     }
 
@@ -80,7 +113,7 @@ export default class HiveGame extends HexGrid {
      * @returns whether piece is immobile
      */
     private isImmobile(pos: LatticeCoords): boolean {
-        const oppLastMove = this.movedLastTurn[this.nextTurn()];
+        const oppLastMove = this.movedLastTurn[this.getNextTurnColor()];
         return oppLastMove !== null && HiveGame.eqPos(oppLastMove, pos);
     }
 
@@ -137,7 +170,7 @@ export default class HiveGame extends HexGrid {
      * @param destination position at which to place
      * @returns discriminated union indicating success or failure with details in each case
      */
-    public placePiece(piece: Piece, destination?: LatticeCoords): PlacementSuccess | PlacementError {
+    public placePiece(piece: Piece, destination?: LatticeCoords): PlacementOutcome {
         const errorTemplate: PlacementError = {
             message: "ErrInvalidDestination",
             status: "Error",
@@ -152,6 +185,7 @@ export default class HiveGame extends HexGrid {
         // spawn piece
         this.setPos(destination, piece);
         piece.height = 1;
+        piece.covering = undefined;
 
         // advance turn
         if (this.turnCount === 0) this.currTurnColor = piece.color;
@@ -236,10 +270,7 @@ export default class HiveGame extends HexGrid {
         if (groupsSeen === 1) return true;
 
         // reject if removing piece from original location disconnects 
-        return HiveGame.graphUtils.countConnected(
-            this.adjPieceCoords(fromPos)[0],
-            (pos) => this.adjPieceCoords(pos, fromPos)
-        ) === this.placementCount.Black + this.placementCount.White - 2;
+        return !HiveGame.graphUtils.isArticulationPoint(fromPos, (pos) => this.adjPieceCoords(pos));
     }
 
     /**
@@ -340,7 +371,7 @@ export default class HiveGame extends HexGrid {
             // all other movement can be calculated in single call to generatePaths()
             let maxDist: number | undefined;
             let isEndpoint: Filter<LatticeCoords> | undefined;
-            let adjFunc: AdjFunc<LatticeCoords> = (pos) => this.adjSlideSpaces(pos, fromPos);
+            let adjFunc: BFSAdj<LatticeCoords> = (pos) => this.adjSlideSpaces(pos, fromPos);
 
             if (type === "QueenBee" || type === "Pillbug") {
                 maxDist = 1;
@@ -464,7 +495,7 @@ export default class HiveGame extends HexGrid {
      * @param destination destination of move
      * @returns discriminated union indicating success or failure with details in each case
      */
-    public movePiece(piece: Piece, destination?: LatticeCoords): MovementSuccess | MovementError {
+    public movePiece(piece: Piece, destination?: LatticeCoords): MovementOutcome {
         const errorTemplate: MovementError = {
             message: "ErrInvalidDestination",
             status: "Error",
@@ -491,19 +522,25 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
+     * Pass the current turn without action (as when no moves are available).
+     * 
+     * @returns discriminated union indicating pass action with success or failure & details
+     */
+    public passTurn(): PassSuccess {
+        // TODO reject pass if moves are available (https://boardgamegeek.com/wiki/page/Hive_FAQ#toc7)
+        this.advanceTurn();
+        return { status: "Success", turnType: "Pass" };
+    }
+
+    /**
      * Process given turn request & perform corresponding actions.
      * 
      * @param turn object encoding details of turn request
-     * @returns discriminated union indicate turn action with success or failure & details
+     * @returns discriminated union indicating turn action with success or failure & details
      */
     public processTurn(turn: TurnRequest): TurnOutcome {
-        // handle passed turn
-        if (turn === "Pass") { // TODO reject pass if moves are available (https://boardgamegeek.com/wiki/page/Hive_FAQ#toc7)
-            this.advanceTurn();
-            return { status: "Success", turnType: "Pass" };
-        }
+        if (turn === "Pass") return this.passTurn();
 
-        // perform placement / movement
         const pos = this.relToAbs(turn.destination);
         if (!this.getPosOf(turn.piece)) return this.placePiece(turn.piece, pos);
         else return this.movePiece(turn.piece, pos);

@@ -3,15 +3,12 @@ import { easeCubic, easeLinear } from "d3-ease";
 import "d3-transition";
 
 import type GameClient from "@/client/sockets/gameClient";
-import Notation, { ParseError } from "@/client/ui/notation";
+import Notation from "@/client/ui/notation";
 import * as icons from "@/client/ui/icons.json";
-import HiveGame from "@/common/game/game";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
-import type { TurnOutcome, TurnRequest } from "@/types/common/turn";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
 import type { MovePaths, ScreenCoords, Sel, SelectedPiece } from "@/types/client/board";
-import type { TurnEventOutcome } from "@/types/server/gameServer";
 
 export default class Board {
     // static lookup-tables
@@ -51,7 +48,6 @@ export default class Board {
         selected: "#b80fc7"
     };
 
-    private game: HiveGame = new HiveGame();
     private playArea: Sel<SVGGElement>;
     private gameClient: GameClient;
 
@@ -210,38 +206,12 @@ export default class Board {
         if (!interactable) this.clearPlaceholders();
     }
 
-    public async processTurn(...turn: TurnRequest[]): Promise<TurnOutcome[]>;
-    public async processTurn(...turnNotation: string[]): Promise<(TurnOutcome | ParseError)[]>;
-    public async processTurn(...turnOrNotation: string[] | TurnRequest[]): Promise<(TurnEventOutcome | ParseError)[]> {
-        const result: (TurnEventOutcome | ParseError)[] = [];
-        for (const tON of turnOrNotation) {
-            let turn: TurnRequest | ParseError;
-            if (typeof tON === "string") {
-                turn = Notation.stringToTurnRequest(tON);
-                if (turn === "ParseError") {
-                    result.push("ParseError");
-                    continue;
-                }
-            } else turn = tON;
-
-            const outcome: TurnEventOutcome = await this.gameClient.makeTurnRequest(turn);
-            if (outcome.status === "Success") {
-                this.game.processTurn(turn); // TODO this could be removed?
-                if (outcome.turnType === "Placement") this.spawnTile(outcome.piece, outcome.destination);
-                else if (outcome.turnType === "Movement") this.moveTile(outcome.piece, outcome.destination);
-            }
-
-            console.log(outcome);
-            result.push(outcome);
-        }
-        return result;
-    }
-
-    private spawnTile(piece: Piece, pos: LatticeCoords): void {
+    public spawnTile(piece: Piece, pos: LatticeCoords): void {
         // spawn tile
         const [x, y] = this.convertCoordinates(...pos);
         const handle = this.playArea
             .append("g")
+            .attr("class", "tile")
             .attr("id", Notation.pieceToString(piece))
             .attr("transform", `translate(${x},${y})`);
         handle.append("use")
@@ -291,12 +261,12 @@ export default class Board {
             e.stopImmediatePropagation();
 
             if (!this.selectedPiece) {
-                const canMove = this.game.checkPieceForMove(piece);
+                const canMove = this.gameClient.game.checkPieceForMove(piece);
                 let hasLegalMoves = false;
 
                 // spawn regular placeholders
                 if (canMove === "Success") {
-                    const generator = this.game.generateLegalMoves(piece);
+                    const generator = this.gameClient.game.generateLegalMoves(piece);
                     let next = generator.next();
                     while (!next.done) {
                         this.spawnPlaceholder(next.value);
@@ -308,7 +278,7 @@ export default class Board {
 
                 // spawn pillbug special-move placeholders
                 if (canMove === "Success" || canMove === "OnlyByPillbug") {
-                    const pillbugMoves = this.game.getPillbugMoves(piece);
+                    const pillbugMoves = this.gameClient.game.getPillbugMoves(piece);
                     for (const dest of pillbugMoves.destinations) {
                         this.spawnPlaceholder(dest, true);
                         hasLegalMoves = true;
@@ -333,7 +303,7 @@ export default class Board {
                     };
                     if (!transform.match(/rotate/g)) animate();
 
-                    console.error(`No legal moves: pieceMayMove() returned ${canMove}`);
+                    console.error(`No legal moves: checkPieceForMove() returned ${canMove}`);
                 }
             } else if (thisIsSelected()) {
                 hex.style("stroke", Board.uiColors.hover);
@@ -365,6 +335,11 @@ export default class Board {
         this.movePathHandle.attr("d", "");
     }
 
+    public clearUI(): void {
+        this.clearPlaceholders();
+        selectAll(".tile").remove();
+    }
+
     private bindPlaceholder(pos: LatticeCoords, handle: Sel<SVGUseElement>, pillbug?: boolean): void {
         handle.on("mouseenter", () => {
             if (this.selectedPiece) {
@@ -388,20 +363,14 @@ export default class Board {
         handle.on("mousedown", (e: MouseEvent) => e.stopImmediatePropagation());
         handle.on("mouseup", () => {
             if (this.selectedPiece) {
-                this.moveTile(this.selectedPiece.piece, pos, true);
+                this.gameClient.makeMoveRequest(this.selectedPiece.piece, pos);
                 this.selectedPiece = null;
                 this.clearPlaceholders();
             }
         });
     }
 
-    private moveTile(piece: Piece, destination: LatticeCoords, checkFirst?: boolean): void {
-        if (checkFirst) {
-            const outcome = this.game.movePiece(piece, destination);
-            console.log(outcome);
-            if (outcome.status !== "Success") return;
-        }
-
+    public moveTile(piece: Piece, destination: LatticeCoords): void {
         let [x, y] = this.convertCoordinates(...destination);
         if (piece.height && piece.height > 1) {
             // TODO render this better

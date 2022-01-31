@@ -62,9 +62,8 @@ export default abstract class HexGrid {
             this.posToPiece[pos.join(",")] = piece;
 
             const pieceToPos = this.pieceToPos[piece.color][piece.type];
-            if (piece.index && piece.index <= pieceToPos.length) {
-                pieceToPos[piece.index - 1] = pos;
-            } else {
+            if (piece.index) pieceToPos[piece.index - 1] = pos;
+            else {
                 pieceToPos.push(pos);
                 piece.index = pieceToPos.length;
             }

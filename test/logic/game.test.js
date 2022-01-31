@@ -272,6 +272,15 @@ describe("When piece is moved", () => {
         expectSuccess("bS1 /wG1"); // walks past gate
     });
 
+    it("correctly handles one-hive rule with mounted pieces", () => {
+        setupStandardGame();
+        expectSuccess("wQ bQ-");
+        expectSuccess("bM wQ-");
+        expectSuccess("wB1 /wP");
+        expectSuccess("bB2 bQ");
+        expectSuccess("wB1 bS1");
+    });
+
     // TODO add more specific bug movement checks
     // TODO add pillbug immobilization checks; test that it only applies on the very next turn, even if pillbug-user subsequently
     // places or passes instead of moving

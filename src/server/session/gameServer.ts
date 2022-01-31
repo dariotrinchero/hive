@@ -3,15 +3,19 @@ import { createServer, Server as HTTPServer } from "http";
 import { Namespace, Server } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
 
+import sum from "@/common/objectHash";
 import HiveGame from "@/common/game/game";
 
 import type {
     ClientToServer,
     InterServer,
+    MovementEventError,
     ServerToClient,
-    SocketData
+    SocketData,
+    TurnEventOutcome
 } from "@/types/common/socket";
-import type { ActiveGames, TurnEventOutcome } from "@/types/server/gameServer";
+import type { ActiveGames } from "@/types/server/gameServer";
+import type { TurnOutcome } from "@/types/common/turn";
 
 const gamePath = (gameId: string) => `/game/${gameId}/`;
 
@@ -54,12 +58,12 @@ export default class GameServer {
             const sessionId = socket.data.sessionId as string;
             socket.emit("session", sessionId);
 
-            // determine if client is player or spectator
-            const players = this.activeGames[gameId].playerSessions;
+            // compute some helpful constants
+            const activeGame = this.activeGames[gameId];
+            const players = activeGame.playerSessions;
             const isSpectator = Object.keys(players).length >= 2 && typeof players[sessionId] === "undefined";
-            const sessionList = this.activeGames[gameId][isSpectator ? "spectatorSessions" : "playerSessions"];
+            const sessionList = activeGame[isSpectator ? "spectatorSessions" : "playerSessions"];
             const memberType = isSpectator ? "spectator" : "player";
-            if (isSpectator) socket.emit("spectating");
 
             // deny multiple connections from same session
             if (sessionList[sessionId]) {
@@ -71,9 +75,15 @@ export default class GameServer {
 
             // join game room & notify any other members
             console.log(`${memberType} ${sessionId} connected`);
+            if (isSpectator) socket.emit("spectating");
             void socket.join(gameId);
             socket.to(gameId).emit(`${memberType} connected`);
             sessionList[sessionId] = true;
+
+            // send current game state to new client
+            if (activeGame.game.getTurnCount() > 0) {
+                socket.emit("game state", activeGame.game.getState(), sum(activeGame.game.getState()));
+            }
 
             socket.on("disconnecting", reason => {
                 console.log(`${memberType} ${sessionId} disconnected for reason ${reason}`);
@@ -82,28 +92,55 @@ export default class GameServer {
                 // TODO delete game after a while if both players disconnect
             });
 
+            // recompute game state hash & broadcast turn outcome
+            const handleTurnOutcome = <T extends TurnOutcome>(outcome: T, callback: (out: T, hash: string) => void) => {
+                const hash = sum(activeGame.game.getState());
+                callback(outcome, hash);
+                if (outcome.status === "Success") {
+                    socket.broadcast.to(gameId).emit("player turn", outcome, hash);
+                }
+            };
+
+            // TODO merge common code in the following:
+
             socket.on("turn request", (req, callback) => {
                 const err: TurnEventOutcome = {
                     message: "ErrInvalidGameId",
                     status: "Error",
                     turnType: "Unknown"
                 };
-                if (!this.activeGames[gameId]) callback(err);
-                if (isSpectator) callback({ ...err, message: "ErrSpectator" });
+                if (!this.activeGames[gameId]) return callback(err, "");
+
+                const hash = sum(activeGame.game.getState());
+                if (isSpectator) return callback({ ...err, message: "ErrSpectator" }, hash);
 
                 // require both players to be online for first move
                 const playersOnline = Object.values(players);
                 const bothOnline = playersOnline.length >= 2 && playersOnline.every(b => b);
-                if (!bothOnline && this.activeGames[gameId].game.getTurnCount() === 0) {
-                    callback({ ...err, message: "ErrNeedOpponentOnline" });
+                if (!bothOnline && activeGame.game.getTurnCount() === 0) {
+                    return callback({ ...err, message: "ErrNeedOpponentOnline" }, hash);
                 }
 
-                // hand request to game & forward outcome
-                const outcome = this.activeGames[gameId].game.processTurn(req);
-                callback(outcome);
-                if (outcome.status === "Success") {
-                    socket.broadcast.to(gameId).emit("player turn", outcome);
-                }
+                handleTurnOutcome(activeGame.game.processTurn(req), callback);
+            });
+
+            socket.on("move request", (piece, destination, callback) => {
+                const err: MovementEventError = {
+                    message: "ErrInvalidGameId",
+                    status: "Error",
+                    turnType: "Movement"
+                };
+                if (!this.activeGames[gameId]) return callback(err, "");
+
+                const hash = sum(activeGame.game.getState());
+                if (isSpectator) return callback({ ...err, message: "ErrSpectator" }, hash);
+
+                handleTurnOutcome(activeGame.game.movePiece(piece, destination), callback);
+            });
+
+            socket.on("game state request", callback => {
+                // TODO include the possibility of game ID being invalid
+                callback(activeGame.game.getState());
             });
         });
 

@@ -1,4 +1,4 @@
-import type { AdjFunc, BFSResults, EdgeTo, Filter, PathMap, Stringify } from "@/types/common/game/graph";
+import type { Adj, BFSAdj, BFSResults, EdgeTo, Filter, PathMap, Stringify } from "@/types/common/game/graph";
 
 export default class GraphUtils<V> {
     private stringify: Stringify<V>;
@@ -23,7 +23,7 @@ export default class GraphUtils<V> {
         }
 
         return (vertex: V) => {
-            // return first path provided by any path function collected
+            // return first path provided by any path-function collected
             for (const path of paths) {
                 const pathResult = path(vertex);
                 if (pathResult.length !== 0) return pathResult;
@@ -33,16 +33,14 @@ export default class GraphUtils<V> {
     }
 
     // NOTE (intentionally) never yields 'source'
-    private *bfs(source: V, adj: AdjFunc<V>, maxDist?: number, isEndpoint?: Filter<V>): Generator<V, BFSResults<V>> {
+    private *bfs(source: V, adj: BFSAdj<V>, maxDist?: number, isEndpoint?: Filter<V>): Generator<V, BFSResults<V>> {
         // initialize results
         const edgeTo: EdgeTo<V> = {};
         const distance: { [v: string]: number; } = {};
-        let connectedCount = 0;
 
         // mark & queue source
-        const queue: V[] = [];
+        const queue: V[] = [source];
         distance[this.stringify(source)] = 0;
-        queue.push(source);
 
         // process items on queue
         while (queue.length > 0) {
@@ -63,16 +61,15 @@ export default class GraphUtils<V> {
                 }
                 edgeTo[wStr] = { isEndpoint: yielded, previous: v };
                 distance[wStr] = vDist + 1;
-                connectedCount++;
 
                 queue.push(w);
             }
         }
 
-        return { connectedCount, distance, edgeTo };
+        return { distance, edgeTo };
     }
 
-    public *generatePaths(source: V, adj: AdjFunc<V>, maxDist?: number, isEndpoint?: Filter<V>): Generator<V, PathMap<V>> {
+    public *generatePaths(source: V, adj: BFSAdj<V>, maxDist?: number, isEndpoint?: Filter<V>): Generator<V, PathMap<V>> {
         // yield valid endpoints
         const generator = this.bfs(source, adj, maxDist, isEndpoint || (() => true));
         let next = generator.next();
@@ -98,7 +95,7 @@ export default class GraphUtils<V> {
         };
     }
 
-    public *generateLengthNPaths(source: V, adj: AdjFunc<V>, steps: number): Generator<V, PathMap<V>> {
+    public *generateLengthNPaths(source: V, adj: BFSAdj<V>, steps: number): Generator<V, PathMap<V>> {
         let currSet: { [v: string]: V; } = { [this.stringify(source)]: source };
         const edgeTo: { [v: string]: V; } = {};
 
@@ -132,12 +129,39 @@ export default class GraphUtils<V> {
         };
     }
 
-    public countConnected(source: V, adj: AdjFunc<V>): number {
-        const generator = this.bfs(source, adj);
-        let next = generator.next();
+    // TODO use Tarjan & Hopcroft's algorithm to compute ALL articulation points in a single DFS, then store
+    // this data & refresh it each move (see https://en.wikipedia.org/wiki/Biconnected_component).
 
-        // since we omit a Filter<V>, this will always run 1 iteration
-        while (!next.done) next = generator.next();
-        return next.value.connectedCount;
+    /**
+     * Determine whether the given vertex is an articulation point - that is, a point whose removal increases
+     * the number of connected components of the graph - as opposed to a biconnected vertex.
+     * 
+     * @param source vertex to test
+     * @returns whether given vertex is an articulation point
+     */
+    public isArticulationPoint(source: V, adj: Adj<V>): boolean {
+        // initialize data structures
+        const marked: { [v: string]: boolean; } = {};
+        marked[this.stringify(source)] = true;
+        const stack: V[] = adj(source);
+
+        const sourceAdj = stack.length;
+        let sourceDFSChildren = 0;
+
+        // process items on stack
+        while (stack.length > 0) {
+            const v: V = stack.pop() as V;
+            const vStr = this.stringify(v);
+            if (marked[vStr]) continue;
+
+            // count children of source in DFS tree
+            if (stack.length < sourceAdj) sourceDFSChildren++;
+
+            // mark vertex & push all adjacencies
+            marked[vStr] = true;
+            adj(v).forEach(w => stack.push(w));
+        }
+
+        return sourceDFSChildren > 1;
     }
 }

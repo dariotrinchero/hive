@@ -33,11 +33,11 @@ export type MovementErrorMsg = CommonErrorMsg
     | "ErrAlreadyThere";
 
 // turn outcome (discriminated union) types
-interface PlacementOutcome {
+interface PlacementBase {
     turnType: "Placement";
 }
 
-interface MovementOutcome {
+interface MovementBase {
     turnType: "Movement";
 }
 
@@ -45,11 +45,11 @@ interface GenericMoveSuccess extends MoveBase {
     destination: LatticeCoords;
 }
 
-export interface PlacementSuccess extends PlacementOutcome, GenericMoveSuccess {
+export interface PlacementSuccess extends PlacementBase, GenericMoveSuccess {
     status: "Success";
 }
 
-export interface MovementSuccess extends MovementOutcome, GenericMoveSuccess {
+export interface MovementSuccess extends MovementBase, GenericMoveSuccess {
     status: "Success";
 }
 
@@ -58,14 +58,16 @@ export interface PassSuccess {
     status: "Success";
 }
 
-export interface PlacementError extends PlacementOutcome {
+export interface PlacementError extends PlacementBase {
     status: "Error";
     message: PlacementErrorMsg;
 }
 
-export interface MovementError extends MovementOutcome {
+export interface MovementError extends MovementBase {
     status: "Error";
     message: MovementErrorMsg;
 }
 
-export type TurnOutcome = PassSuccess | PlacementSuccess | PlacementError | MovementSuccess | MovementError;
+export type PlacementOutcome = PlacementSuccess | PlacementError;
+export type MovementOutcome = MovementSuccess | MovementError;
+export type TurnOutcome = PassSuccess | PlacementOutcome | MovementOutcome;
