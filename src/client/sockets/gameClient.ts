@@ -8,8 +8,15 @@ import HiveGame from "@/common/game/game";
 import type { ClientToServer, GameState, ServerToClient, TurnEventOutcome } from "@/types/common/socket";
 import type { TurnOutcome, TurnRequest } from "@/types/common/turn";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
-import type { Piece } from "@/types/common/piece";
+import type { Piece, PieceColor } from "@/types/common/piece";
+import type { MovementCheckOutcome } from "@/types/common/game/game";
 
+interface MovementCheckOutcomePremove {
+    outcome: MovementCheckOutcome;
+    premove: boolean;
+}
+
+// TODO determine this based on screen size?
 const hexRad = 90;
 
 export default class GameClient {
@@ -18,16 +25,18 @@ export default class GameClient {
     private timeout: number;
 
     // game related
-    private board: Board;
     public game: HiveGame = new HiveGame();
+    private board: Board = new Board(this, hexRad, hexRad / 6, hexRad / 18);
 
-    constructor(timeout: number) {
+    private playerColor?: PieceColor;
+    private startingColor?: PieceColor;
+
+    constructor(timeout?: number) {
         this.socket = io(document.location.pathname, {
             auth: { sessionId: localStorage.getItem("sessionId") }
         });
-        this.timeout = timeout;
+        this.timeout = timeout || 5000;
         this.bindSocketEvents();
-        this.board = new Board(this, hexRad, hexRad / 6, hexRad / 18);
     }
 
     private bindSocketEvents() {
@@ -47,18 +56,23 @@ export default class GameClient {
             );
         });
 
-        this.socket.onAny((...args) => console.log(args)); // TODO for dev debugging only
+        this.socket.prependAny((...args) => console.log(args)); // TODO for dev debugging only
 
         this.socket.on("game state", state => this.loadState(state));
 
-        this.socket.on("session", sessionId => {
-            this.socket.auth = { sessionId };
-            localStorage.setItem("sessionId", sessionId);
-        });
+        this.socket.on("session", session => {
+            this.socket.auth = { sessionId: session.sessionId };
+            localStorage.setItem("sessionId", session.sessionId);
 
-        this.socket.on("spectating", () => {
-            console.error("Game full; joined as spectator.");
-            this.board.setInteractable(false);
+            if (session.spectating) {
+                console.error("Game full; joined as spectator.");
+                this.board.setInteractable(false);
+            } else {
+                this.playerColor = session.color;
+                this.startingColor = session.startingColor;
+            }
+
+            this.game.setColorToStart(session.startingColor);
         });
 
         this.socket.on("connect_error", err => {
@@ -83,13 +97,22 @@ export default class GameClient {
                 }
             }
 
+            // TODO send pending premove request here
         });
 
-        this.socket.on("player connected", () => {
+        this.socket.on("Player connected", () => {
             // TODO handle connect
         });
 
-        this.socket.on("player disconnected", () => {
+        this.socket.on("Player disconnected", () => {
+            // TODO handle disconnect
+        });
+
+        this.socket.on("Spectator connected", () => {
+            // TODO handle connect
+        });
+
+        this.socket.on("Spectator disconnected", () => {
             // TODO handle disconnect
         });
     }
@@ -100,11 +123,13 @@ export default class GameClient {
      * @param promise the promise to race against a timeout
      * @returns a new promise of the same type as that given which rejects if time runs out
      */
-    private raceTimeout<T>(promise: Promise<T>): Promise<T> {
+    private raceTimeout<T>(promise: Promise<T>): Promise<T> { // TODO delete this function?
         const timeout: Promise<T> = new Promise((_resolve, reject) =>
             setTimeout(() => reject("Request timed out."), this.timeout));
         return Promise.race([timeout, promise]);
     }
+
+    // TODO find some way of merging these functions...
 
     public async processTurns(...turn: TurnRequest[]): Promise<TurnOutcome[]>;
     public async processTurns(...turnNotation: string[]): Promise<(TurnOutcome | ParseError)[]>;
@@ -139,8 +164,6 @@ export default class GameClient {
         return result;
     }
 
-    // TODO find some way of merging these functions... Find a more general way of checking for state drift...
-
     private makeTurnRequest(req: TurnRequest): Promise<[TurnEventOutcome, string]> {
         return new Promise(resolve =>
             this.socket.emit("turn request", req, (outcome, hash) => resolve([outcome, hash])));
@@ -159,6 +182,13 @@ export default class GameClient {
         });
     }
 
+    public checkPieceForMove(piece: Piece): MovementCheckOutcomePremove {
+        return {
+            outcome: this.game.checkPieceForMove(piece, undefined, this.playerColor),
+            premove: this.playerColor !== this.game.getCurrTurnColor()
+        };
+    }
+
     private syncState(): void {
         console.log("Requesting state sync.");
         this.socket.emit("game state request", state => this.loadState(state));
@@ -167,7 +197,7 @@ export default class GameClient {
     private loadState(state: GameState): void {
         console.log(`Loading state with client-side hash ${sum(state)}:`);
 
-        this.board.clearUI();
+        this.board.clearBoard();
         this.game = HiveGame.fromState(state);
 
         Object.entries(state.posToPiece).forEach(([posStr, piece]) => {

@@ -1,4 +1,4 @@
-import { pieceInventory } from "@/common/piece";
+import { invertColor, pieceInventory } from "@/common/piece";
 import GraphUtils from "@/common/game/graph";
 import HexGrid from "@/common/game/hexGrid";
 
@@ -30,7 +30,7 @@ export default class HiveGame extends HexGrid {
 
     // game state
     private turnCount: number;
-    private currTurnColor: PieceColor = "Black";
+    private currTurnColor: PieceColor;
     private movedLastTurn: LastMoveDestination;
 
     // inferrable from state
@@ -38,12 +38,13 @@ export default class HiveGame extends HexGrid {
     private playerInventories: PlayerInventories;
     private gameStatus: GameStatus;
 
-    public constructor() {
+    public constructor(colorToStart?: PieceColor) {
         super();
         this.playerInventories = {
             Black: { ...pieceInventory },
             White: { ...pieceInventory }
         };
+        this.currTurnColor = colorToStart || "Black";
         this.movedLastTurn = { Black: null, White: null };
         this.placementCount = { Black: 0, White: 0 };
         this.turnCount = 0;
@@ -51,7 +52,7 @@ export default class HiveGame extends HexGrid {
     }
 
     public static fromState(state: GameState): HiveGame {
-        const game = new HiveGame();
+        const game = new HiveGame("Black");
         game.turnCount = state.turnCount;
         game.currTurnColor = state.currTurnColor;
         game.movedLastTurn = state.movedLastTurn;
@@ -87,11 +88,15 @@ export default class HiveGame extends HexGrid {
     }
 
     private getNextTurnColor(): PieceColor {
-        return this.currTurnColor === "Black" ? "White" : "Black";
+        return invertColor(this.currTurnColor);
     }
 
     public getTurnCount(): number {
         return this.turnCount;
+    }
+
+    public setColorToStart(color: PieceColor): void {
+        if (this.turnCount === 0) this.currTurnColor = color;
     }
 
     /**
@@ -139,12 +144,14 @@ export default class HiveGame extends HexGrid {
      * @returns success, or error message indicating reason for illegality
      */
     private checkPlacement(piece: Piece, pos: LatticeCoords): PlacementCheckOutcome {
-        // always accept first placement
-        if (this.turnCount === 0) return "Success";
-
         // basic immediate rejections
         if (this.gameStatus !== "Ongoing") return "ErrGameOver";
         if (this.currTurnColor !== piece.color) return "ErrOutOfTurn";
+
+        // always accept first placement if not out-of-turn
+        if (this.turnCount === 0) return "Success";
+
+        // more immediate rejections
         if (this.getPieceAt(pos)) return "ErrDestinationOccupied";
         if (this.adjPieceCoords(pos).length === 0) return "ErrOneHiveRule";
         if (this.playerInventories[piece.color][piece.type] <= 0) return "ErrOutOfPieces";
@@ -188,7 +195,6 @@ export default class HiveGame extends HexGrid {
         piece.covering = undefined;
 
         // advance turn
-        if (this.turnCount === 0) this.currTurnColor = piece.color;
         this.placementCount[piece.color]++;
         this.playerInventories[piece.color][piece.type] -= 1;
         this.advanceTurn();
@@ -279,12 +285,15 @@ export default class HiveGame extends HexGrid {
      * 
      * @param piece piece to move
      * @param fromPos location of piece prior to move
+     * @param colorOverride overrides current color to move (used by client to compute premoves during opposing turn)
      * @returns success, or error message indicating reason for illegality
      */
-    public checkPieceForMove(piece: Piece, fromPos?: LatticeCoords): MovementCheckOutcome {
+    public checkPieceForMove(piece: Piece, fromPos?: LatticeCoords, colorOverride?: PieceColor): MovementCheckOutcome {
+        const colorToMove = colorOverride || this.currTurnColor;
+
         // basic rejections
         if (this.gameStatus !== "Ongoing") return "ErrGameOver";
-        if (this.playerInventories[this.currTurnColor].QueenBee === 1) return "ErrQueenUnplayed";
+        if (this.playerInventories[colorToMove].QueenBee === 1) return "ErrQueenUnplayed";
 
         // get position of piece & check that piece is actually there
         fromPos = fromPos || this.getPosOf(piece);
@@ -301,7 +310,7 @@ export default class HiveGame extends HexGrid {
         if (this.isImmobile(fromPos)) return "ErrPieceMovedLastTurn";
         if (!this.checkOneHive(piece, fromPos)) return "ErrOneHiveRule";
 
-        return this.currTurnColor === piece.color ? "Success" : "OnlyByPillbug";
+        return colorToMove === piece.color ? "Success" : "OnlyByPillbug";
     }
 
     /**

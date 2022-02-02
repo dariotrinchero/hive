@@ -10,23 +10,24 @@ import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
 import type { MovePaths, ScreenCoords, Sel, SelectedPiece } from "@/types/client/board";
 
+const bugColors: Record<PieceType, string> = {
+    Ant: "#0fa9f0",
+    Beetle: "#8779b9",
+    Grasshopper: "#2fbc3d",
+    Ladybug: "#d72833",
+    Mosquito: "#a6a6a6",
+    Pillbug: "#49ad92",
+    QueenBee: "#fcb336",
+    Spider: "#9f622d"
+};
+const tileColors: Record<PieceColor, string> = {
+    Black: "#363430",
+    White: "#f3ecde"
+};
+
 export default class Board {
     // static lookup-tables
-    private static tileColorMap: { [color in PieceColor]: string } = {
-        Black: "#363430",
-        White: "#f3ecde"
-    };
-    private static bugColorMap: { [bug in PieceType]: string } = {
-        Ant: "#0fa9f0",
-        Beetle: "#8779b9",
-        Grasshopper: "#2fbc3d",
-        Ladybug: "#d72833",
-        Mosquito: "#a6a6a6",
-        Pillbug: "#49ad92",
-        QueenBee: "#fcb336",
-        Spider: "#9f622d"
-    };
-    private static bugScaleMap: { [bug in PieceType]: number } = {
+    private static bugScales: Record<PieceType, number> = {
         // ratio of bugHeight/hexRadius which looks best for each bug
         Ant: 1.29981,
         Beetle: 1.50629,
@@ -37,15 +38,24 @@ export default class Board {
         QueenBee: 1.02462,
         Spider: 1.52296
     };
-    private static uiColors = {
-        hover: "#e50bbd99",
-        path: "#b80fc755",
-        pillbugPath: "#46a088bb",
-        pillbugPlaceholder: "#49ad92bb",
-        pillbugPlaceholderHover: "#49ad9277",
-        placeholder: "#e50bbd77",
-        placeholderHover: "#e50bbd33",
-        selected: "#b80fc7"
+    private static colors = {
+        bug: bugColors,
+        outline: {
+            base: "none",
+            hover: "#e50bbd99",
+            selected: "#e50bbd99"
+        },
+        path: {
+            base: "#b80fc755",
+            pillbug: "#46a088bb"
+        },
+        placeholder: {
+            base: "#e50bbd77",
+            hover: "#e50bbd33",
+            pillbug: "#49ad92bb",
+            pillbugHover: "#49ad9277"
+        },
+        tile: tileColors
     };
 
     private playArea: Sel<SVGGElement>;
@@ -206,6 +216,12 @@ export default class Board {
         if (!interactable) this.clearPlaceholders();
     }
 
+    /**
+     * Spawn tile representing given piece at given location. 
+     *
+     * @param piece piece (color & insect-type) which tile should represent
+     * @param pos position of tile in lattice coordinates
+     */
     public spawnTile(piece: Piece, pos: LatticeCoords): void {
         // spawn tile
         const [x, y] = this.convertCoordinates(...pos);
@@ -216,13 +232,13 @@ export default class Board {
             .attr("transform", `translate(${x},${y})`);
         handle.append("use")
             .attr("xlink:href", "#hex")
-            .style("fill", Board.tileColorMap[piece.color])
+            .style("fill", Board.colors.tile[piece.color])
             .style("stroke-width", `${this.hexRadGap * Math.sqrt(3)}px`);
         if (this.interactable) this.bindTile(piece, handle, pos); // bind mouse events
 
         // add centered bug icon
         const strokeWidth = piece.type === "Pillbug" ? 1 : 0;
-        const bugColor = Board.bugColorMap[piece.type];
+        const bugColor = Board.colors.bug[piece.type];
         const bug = handle.append("use")
             .attr("xlink:href", `#${piece.type}`)
             .style("fill", bugColor)
@@ -230,7 +246,7 @@ export default class Board {
             .style("stroke-width", `${strokeWidth}px`);
 
         const { height, width } = bug.node()?.getBoundingClientRect() || { height: 120, width: 100 };
-        const scale: number = Board.bugScaleMap[piece.type] * this.hexRadius / height;
+        const scale: number = Board.bugScales[piece.type] * this.hexRadius / height;
         bug.attr("transform", `scale(${scale})`
             + `translate(-${width / 2 - 2 * strokeWidth},-${height / 2})`);
     }
@@ -242,7 +258,7 @@ export default class Board {
 
         handle.on("mouseenter", () => {
             if (!this.selectedPiece || thisIsSelected()) {
-                hex.style("stroke", Board.uiColors.hover);
+                hex.style("stroke", Board.colors.outline.hover);
                 handle.style("cursor", "pointer");
             } else {
                 handle.style("cursor", "default");
@@ -253,7 +269,7 @@ export default class Board {
             if (!this.selectedPiece) {
                 hex.style("stroke", "none");
             } else if (thisIsSelected()) {
-                hex.style("stroke", Board.uiColors.selected);
+                hex.style("stroke", Board.colors.outline.selected);
             }
         });
 
@@ -261,15 +277,15 @@ export default class Board {
             e.stopImmediatePropagation();
 
             if (!this.selectedPiece) {
-                const canMove = this.gameClient.game.checkPieceForMove(piece);
+                const checkOutcome = this.gameClient.checkPieceForMove(piece);
                 let hasLegalMoves = false;
 
                 // spawn regular placeholders
-                if (canMove === "Success") {
+                if (checkOutcome.outcome === "Success") {
                     const generator = this.gameClient.game.generateLegalMoves(piece);
                     let next = generator.next();
                     while (!next.done) {
-                        this.spawnPlaceholder(next.value);
+                        this.spawnPlaceholder(next.value, checkOutcome.premove);
                         hasLegalMoves = true;
                         next = generator.next();
                     }
@@ -277,10 +293,10 @@ export default class Board {
                 }
 
                 // spawn pillbug special-move placeholders
-                if (canMove === "Success" || canMove === "OnlyByPillbug") {
+                if (checkOutcome.outcome === "Success" || checkOutcome.outcome === "OnlyByPillbug") {
                     const pillbugMoves = this.gameClient.game.getPillbugMoves(piece);
                     for (const dest of pillbugMoves.destinations) {
-                        this.spawnPlaceholder(dest, true);
+                        this.spawnPlaceholder(dest, true, checkOutcome.premove);
                         hasLegalMoves = true;
                     }
                     this.movePaths.pillbug = pillbugMoves.pathMap;
@@ -289,7 +305,7 @@ export default class Board {
                 // select tile if it has legal moves
                 if (hasLegalMoves) {
                     this.selectedPiece = { piece, pos };
-                    hex.style("stroke", Board.uiColors.selected);
+                    hex.style("stroke", Board.colors.outline.selected);
                 } else {
                     // handle clicking of piece with no legal moves
                     const transform = handle.attr("transform");
@@ -303,23 +319,25 @@ export default class Board {
                     };
                     if (!transform.match(/rotate/g)) animate();
 
-                    console.error(`No legal moves: checkPieceForMove() returned ${canMove}`);
+                    console.error(`No legal moves: checkPieceForMove() returned ${checkOutcome.outcome}`);
                 }
             } else if (thisIsSelected()) {
-                hex.style("stroke", Board.uiColors.hover);
+                hex.style("stroke", Board.colors.outline.hover);
                 this.selectedPiece = null;
                 this.clearPlaceholders();
             }
         });
     }
 
-    private spawnPlaceholder(pos: LatticeCoords, pillbug?: boolean): void {
+    private spawnPlaceholder(pos: LatticeCoords, pillbug?: boolean, premove?: boolean): void {
+        // TODO handle special behaviour for premoves
+
         if (!this.placeholderSet[pos.join(",")]) {
             const [x, y] = this.convertCoordinates(...pos);
             const handle = this.playArea.append("use")
                 .attr("xlink:href", "#placeholder")
                 .attr("class", "placeholder")
-                .style("stroke", Board.uiColors[pillbug ? "pillbugPlaceholder" : "placeholder"])
+                .style("stroke", Board.colors.placeholder[pillbug ? "pillbug" : "base"])
                 .style("fill", "#ffffff00")
                 .attr("transform", `translate(${x},${y})`);
 
@@ -335,7 +353,7 @@ export default class Board {
         this.movePathHandle.attr("d", "");
     }
 
-    public clearUI(): void {
+    public clearBoard(): void {
         this.clearPlaceholders();
         selectAll(".tile").remove();
     }
@@ -343,13 +361,13 @@ export default class Board {
     private bindPlaceholder(pos: LatticeCoords, handle: Sel<SVGUseElement>, pillbug?: boolean): void {
         handle.on("mouseenter", () => {
             if (this.selectedPiece) {
-                handle.style("fill", Board.uiColors[pillbug ? "pillbugPlaceholderHover" : "placeholderHover"]);
+                handle.style("fill", Board.colors.placeholder[pillbug ? "pillbugHover" : "hover"]);
                 handle.style("cursor", "pointer");
 
                 const coordMap = (p: LatticeCoords) => this.convertCoordinates(...p).join(",");
                 this.movePathHandle
                     .raise()
-                    .style("stroke", Board.uiColors[pillbug ? "pillbugPath" : "path"])
+                    .style("stroke", Board.colors.path[pillbug ? "pillbug" : "base"])
                     .attr("d", `M${coordMap(pos)}L`
                         + this.movePaths[pillbug ? "pillbug" : "normal"](pos).map(coordMap).join("L"));
             }

@@ -60,7 +60,7 @@ describe("When new piece is placed", () => {
     it("rejects if out-of-turn", () => {
         expectSuccess("bG .");
         expectError("bA bG1-", "ErrOutOfTurn");
-        game = new HiveGame();
+        game = new HiveGame("White");
         expectSuccess("wQ .");
         expectError("wB wQ-", "ErrOutOfTurn");
     });
@@ -120,6 +120,7 @@ describe("When piece is moved", () => {
     beforeEach(() => game = new HiveGame());
 
     it("rejects if game is over", () => {
+        game.setColorToStart("White");
         processTurns(
             "wQ .",
             "bQ wQ-",
@@ -136,6 +137,7 @@ describe("When piece is moved", () => {
     });
 
     it("rejects if no piece is found", () => {
+        game.setColorToStart("White");
         processTurns("wB .");
         expect(forceMove("bA1 wB1").message).toBe("ErrInvalidMovingPiece");
     });
@@ -158,6 +160,7 @@ describe("When piece is moved", () => {
     });
 
     it("rejects if destination is the same as origin", () => {
+        game.setColorToStart("White");
         processTurns(
             "wQ .",
             "bQ wQ-",
@@ -334,6 +337,7 @@ describe("When the game is over", () => {
 
     it("detects a black victory", () => {
         expect(game.checkGameStatus()).toBe("Ongoing");
+        game.setColorToStart("White");
         processTurns(
             "wQ .",
             "bQ wQ-",

@@ -1,4 +1,4 @@
-import type { Inventory } from "@/types/common/piece";
+import type { Inventory, PieceColor } from "@/types/common/piece";
 
 export enum Colors {
     Black,
@@ -26,3 +26,5 @@ export const pieceInventory: Inventory = {
     QueenBee: 1,
     Spider: 2
 };
+
+export const invertColor = (color: PieceColor): PieceColor => color === "Black" ? "White" : "Black";
