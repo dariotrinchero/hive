@@ -3,21 +3,21 @@ import GraphUtils from "@/common/game/graph";
 import HexGrid from "@/common/game/hexGrid";
 
 import type {
+    GenericTurnOutcome,
+    GenericTurnRequest,
     MovementError,
     MovementOutcome,
     PassSuccess,
     PlacementError,
-    PlacementOutcome,
-    TurnOutcome,
-    TurnRequest
+    PlacementOutcome
 } from "@/types/common/turn";
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { GameState } from "@/types/common/socket";
 import type {
     GameStatus,
     LastMoveDestination,
+    MoveGenerator,
     MovementCheckOutcome,
-    PillbugMoves,
     PlacementCheckOutcome,
     PlacementCount,
     PlayerInventories
@@ -314,39 +314,35 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
-     * Generate all legal moves for given piece starting at given location. The lazy/online generator
-     * approach is to speed up checking legality of a move, where we can stop generating early upon
-     * finding the move of interest.
+     * Generate all legal moves for given piece starting at given location, ignoring moves which make use
+     * of the pillbug special ability. The lazy/online generator approach is to speed up checking legality
+     * of a move, where we can stop generating early upon finding the move of interest.
      * 
-     * @see checkBugMovement
+     * @see isLegalBugMove
      * @param piece piece to move
      * @param fromPos location of piece prior to move
      * @param mosqOverride if given piece is a mosquito, treat it as this type instead
      * @yields legal moves
      * @returns function mapping each destination to array of intermediate positions (encoding paths taken)
      */
-    public *generateLegalMoves(
-        piece: Piece,
-        fromPos?: LatticeCoords,
-        mosqOverride?: PieceType
-    ): Generator<LatticeCoords, PathMap<LatticeCoords>> {
+    private *generateStandardMoves(piece: Piece, fromPos?: LatticeCoords, mosqOverride?: PieceType): MoveGenerator {
         fromPos = fromPos || this.getPosOf(piece);
         if (!fromPos) return () => [];
 
         // construct appropriate move generator for each piece type
-        let generator: Generator<LatticeCoords, PathMap<LatticeCoords>>;
+        let generator: MoveGenerator;
         const type = piece.type === "Mosquito" && mosqOverride ? mosqOverride : piece.type;
 
         if (type === "Mosquito") {
             generator = piece.covering
                 // move like beetle while on hive
-                ? this.generateLegalMoves(piece, fromPos, "Beetle")
+                ? this.generateStandardMoves(piece, fromPos, "Beetle")
 
                 // else merge adjacent non-mosquitoes' moves
                 : GraphUtils.mergeGenerators(
                     ...this.adjPieces(fromPos)
                         .filter(p => p.type !== "Mosquito")
-                        .map(p => this.generateLegalMoves(piece, fromPos, p.type))
+                        .map(p => this.generateStandardMoves(piece, fromPos, p.type))
                 );
         }
 
@@ -396,7 +392,7 @@ export default class HiveGame extends HexGrid {
             generator = HiveGame.graphUtils.generatePaths(fromPos, adjFunc, maxDist, isEndpoint);
         }
 
-        // generate moves & return path information
+        // yield moves & return path information
         let next: IteratorResult<LatticeCoords, PathMap<LatticeCoords>>;
         next = generator.next();
         while (!next.done) {
@@ -407,27 +403,31 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
-     * Get any legal moves of given piece, starting at given (old) location, which make use of the special ability
-     * of a neighbouring pillbug (or mosquito touching pillbug).
+     * Generate all legal moves of given piece which start at given (old) location and which make use of the
+     * special ability of a neighbouring pillbug (or mosquito touching pillbug). The lazy/online generator
+     * approach is for syntactic consistency with the regular legal move generation.
      * 
+     * @see generateStandardMoves
      * @param piece piece to move
      * @param fromPos location of piece prior to move
-     * @returns array of legal moves of given piece over some adjacent pillbug, as well as path map
+     * @param colorOverride overrides current color to move (used by client to compute premoves during opposing turn)
+     * @yields legal moves that use pillbug ability
+     * @returns function mapping each destination to array of intermediate positions (encoding paths taken)
      */
-    public getPillbugMoves(piece: Piece, fromPos?: LatticeCoords): PillbugMoves {
-        const emptyResult: PillbugMoves = { destinations: [], pathMap: () => [] };
+    private *generatePillbugMoves(piece: Piece, fromPos?: LatticeCoords, colorOverride?: PieceColor): MoveGenerator {
+        const colorToMove = colorOverride || this.currTurnColor;
         fromPos = fromPos || this.getPosOf(piece);
-        if (!fromPos) return emptyResult;
+        if (!fromPos) return () => [];
 
         // may not affect stacked pieces
-        if (piece.covering) return emptyResult;
+        if (piece.covering) return () => [];
 
-        // find adjacent non-immobilized pillbug / mosquito of current turn colour
+        // find adjacent non-immobilized pillbug / mosquito of current colour
         const pillbugPositions = this.adjPieceCoords(fromPos).filter(adjPos => {
             if (this.isImmobile(adjPos)) return false;
 
             const adjPiece = this.getPieceAt(adjPos);
-            if (adjPiece?.color !== this.currTurnColor) return false;
+            if (adjPiece?.color !== colorToMove) return false;
 
             return adjPiece.type === "Pillbug"
                 || adjPiece.type === "Mosquito"
@@ -440,28 +440,46 @@ export default class HiveGame extends HexGrid {
                 .some(p => HiveGame.eqPos(p, pillbugPos));
         const mountablePillbugs = pillbugPositions.filter(mountable);
 
-        // return dismount points from all mountable pillbugs
+        // yield dismount points from all mountable pillbugs & return path map
         const destinations: LatticeCoords[][] = mountablePillbugs.map(pillbugPos =>
             this.adjMounts(pillbugPos, fromPos, true));
-        const pathMap: PathMap<LatticeCoords> = (vertex: LatticeCoords) => {
+        yield* destinations.flat();
+        return (vertex: LatticeCoords) => {
             const index = destinations.findIndex(list => list.some(pos => HiveGame.eqPos(pos, vertex)));
             if (index < 0) return [];
             return [mountablePillbugs[index], fromPos as LatticeCoords];
         };
-        return { destinations: destinations.flat(), pathMap };
+    }
+
+    public generateLegalMoves(
+        piece: Piece,
+        viaPillbug?: boolean,
+        colorOverride?: PieceColor,
+        fromPos?: LatticeCoords
+    ): MoveGenerator {
+        const pillbugMoves = this.generatePillbugMoves(piece, fromPos, colorOverride);
+        const normalMoves = this.generateStandardMoves(piece, fromPos);
+
+        if (typeof viaPillbug === "undefined") {
+            // if viaPillbug is unset, consider both pillbug moves and normal moves
+            return GraphUtils.mergeGenerators(pillbugMoves, normalMoves);
+        }
+        return viaPillbug ? pillbugMoves : normalMoves;
     }
 
     /**
      * Check that moving given piece from given location to given location obeys specific movement rules for the
-     * type of bug represented the piece.
+     * type of bug represented by the piece.
      * 
      * @param piece piece to move
      * @param fromPos location of piece prior to move
      * @param toPos location of piece after move
+     * @param viaPillbug if true/false, check for moves specifically using/ignoring pillbug special ability;
+     *                   otherwise, check for all legal moves
      * @returns whether move is consistent with piece's specific movement patterns
      */
-    private checkBugMovement(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords): boolean {
-        const generator = this.generateLegalMoves(piece, fromPos);
+    private isLegalBugMove(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords, viaPillbug?: boolean): boolean {
+        const generator = this.generateLegalMoves(piece, viaPillbug, undefined, fromPos);
         let next = generator.next();
         while (!next.done) {
             if (HiveGame.eqPos(next.value, toPos)) return true;
@@ -479,20 +497,17 @@ export default class HiveGame extends HexGrid {
      * @returns success, or error message indicating reason for illegality
      */
     private checkMove(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords): MovementCheckOutcome {
-        const pieceCanMove = this.checkPieceForMove(piece, fromPos);
-        const validPillbugMove = this.getPillbugMoves(piece, fromPos).destinations
-            .some(pos => HiveGame.eqPos(pos, toPos));
-
         // check that piece can move at all
+        const pieceCanMove = this.checkPieceForMove(piece, fromPos);
         if (pieceCanMove === "OnlyByPillbug") {
-            if (!validPillbugMove) return "ErrOutOfTurn";
+            if (!this.isLegalBugMove(piece, fromPos, toPos, true)) return "ErrOutOfTurn";
         } else if (pieceCanMove !== "Success") return pieceCanMove;
 
         // check that destination is valid
         if (HiveGame.eqPos(fromPos, toPos)) return "ErrAlreadyThere";
         if (this.adjPieceCoords(toPos, piece.covering ? undefined : fromPos).length === 0) return "ErrOneHiveRule";
         if (this.getPieceAt(toPos) && piece.type !== "Beetle" && piece.type !== "Mosquito") return "ErrDestinationOccupied";
-        if (!validPillbugMove && !this.checkBugMovement(piece, fromPos, toPos)) return `ErrViolates${piece.type}Movement`;
+        if (!this.isLegalBugMove(piece, fromPos, toPos)) return `ErrViolates${piece.type}Movement`;
 
         return pieceCanMove;
     }
@@ -547,7 +562,7 @@ export default class HiveGame extends HexGrid {
      * @param turn object encoding details of turn request
      * @returns discriminated union indicating turn action with success or failure & details
      */
-    public processTurn(turn: TurnRequest): TurnOutcome {
+    public processTurn(turn: GenericTurnRequest): GenericTurnOutcome {
         if (turn === "Pass") return this.passTurn();
 
         const pos = this.relToAbs(turn.destination);

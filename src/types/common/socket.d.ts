@@ -1,4 +1,4 @@
-import type { MovementOutcome, TurnOutcome, TurnRequest } from "@/types/common/turn";
+import type { GenericTurnOutcome, GenericTurnRequest, MovementOutcome } from "@/types/common/turn";
 import type { Piece, PieceColor } from "@/types/common/piece";
 import type { LastMoveDestination } from "@/types/common/game/game";
 import type { LatticeCoords, PosToPiece } from "@/types/common/game/hexGrid";
@@ -22,7 +22,7 @@ interface MovementEventError extends EventErrorBase {
     turnType: "Movement";
 }
 
-export type TurnEventOutcome = TurnOutcome | TurnEventError;
+export type TurnEventOutcome = GenericTurnOutcome | TurnEventError;
 export type MovementEventOutcome = MovementOutcome | MovementEventError;
 
 // player session
@@ -56,13 +56,13 @@ export interface GameState {
 type ConnectionEvents = Record<`${ClientType} ${"dis" | ""}connected`, () => void>;
 
 export interface ServerToClient extends ConnectionEvents {
-    "player turn": (out: TurnOutcome, hash: string) => void;
+    "player turn": (out: GenericTurnOutcome, hash: string) => void;
     "session": (session: ClientSession) => void;
     "game state": (state: GameState, hash: string) => void;
 }
 
 export interface ClientToServer {
-    "turn request": (req: TurnRequest, callback: (out: TurnEventOutcome, hash: string) => void) => void;
+    "turn request": (req: GenericTurnRequest, callback: (out: TurnEventOutcome, hash: string) => void) => void;
     "game state request": (callback: (state: GameState) => void) => void;
     "move request": (piece: Piece, dest: LatticeCoords, callback: (out: MovementEventOutcome, hash: string) => void) => void;
 }

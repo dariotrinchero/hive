@@ -10,7 +10,7 @@ interface GenericMove extends MoveBase {
     destination: RelativePosition;
 }
 
-export type TurnRequest = "Pass" | GenericMove;
+export type GenericTurnRequest = "Pass" | GenericMove;
 
 // turn error message types
 type CommonErrorMsg = "ErrOutOfTurn"
@@ -70,4 +70,4 @@ export interface MovementError extends MovementBase {
 
 export type PlacementOutcome = PlacementSuccess | PlacementError;
 export type MovementOutcome = MovementSuccess | MovementError;
-export type TurnOutcome = PassSuccess | PlacementOutcome | MovementOutcome;
+export type GenericTurnOutcome = PassSuccess | PlacementOutcome | MovementOutcome;

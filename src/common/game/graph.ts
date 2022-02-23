@@ -7,6 +7,17 @@ export default class GraphUtils<V> {
         this.stringify = stringify || ((vertex: V) => JSON.stringify(vertex));
     }
 
+    public static mergePathMaps<V>(...paths: PathMap<V>[]): PathMap<V> {
+        return (vertex: V) => {
+            // return first path provided by any path-function collected
+            for (const path of paths) {
+                const pathResult = path(vertex);
+                if (pathResult.length !== 0) return pathResult;
+            }
+            return [];
+        };
+    }
+
     public static *mergeGenerators<V>(...generators: Generator<V, PathMap<V>>[]): Generator<V, PathMap<V>> {
         const paths: PathMap<V>[] = [];
 
@@ -22,14 +33,7 @@ export default class GraphUtils<V> {
             paths.push(next.value);
         }
 
-        return (vertex: V) => {
-            // return first path provided by any path-function collected
-            for (const path of paths) {
-                const pathResult = path(vertex);
-                if (pathResult.length !== 0) return pathResult;
-            }
-            return [];
-        };
+        return GraphUtils.mergePathMaps(...paths);
     }
 
     // NOTE (intentionally) never yields 'source'

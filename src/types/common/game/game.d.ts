@@ -15,8 +15,5 @@ export type GameStatus = "Ongoing" | "BlackWin" | "WhiteWin" | "Draw";
 export type PlacementCheckOutcome = "Success" | PlacementErrorMsg;
 export type MovementCheckOutcome = "Success" | "OnlyByPillbug" | MovementErrorMsg;
 
-// pillbug moves
-export interface PillbugMoves {
-    destinations: LatticeCoords[];
-    pathMap: PathMap<LatticeCoords>;
-}
+// move generator
+export type MoveGenerator = Generator<LatticeCoords, PathMap<LatticeCoords>, undefined>;

@@ -25,7 +25,7 @@ import type {
     IOSocket,
     StartingColor
 } from "@/types/server/gameServer";
-import type { TurnOutcome } from "@/types/common/turn";
+import type { GenericTurnOutcome } from "@/types/common/turn";
 import type { PieceColor } from "@/types/common/piece";
 
 export default class GameServer {
@@ -148,7 +148,7 @@ export default class GameServer {
         return false;
     }
 
-    private handleTurnOutcome<T extends TurnOutcome>(
+    private handleTurnOutcome<T extends GenericTurnOutcome>(
         clientDetails: ClientDetails,
         outcome: T,
         callback: (out: T, hash: string) => void

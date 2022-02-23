@@ -8,7 +8,9 @@ import * as icons from "@/client/ui/icons.json";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
-import type { MovePaths, ScreenCoords, Sel, SelectedPiece } from "@/types/client/board";
+import type { ScreenCoords, Sel, SelectedPiece } from "@/types/client/board";
+import type { PathMap } from "@/types/common/game/graph";
+import GraphUtils from "@/common/game/graph";
 
 const bugColors: Record<PieceType, string> = {
     Ant: "#0fa9f0",
@@ -43,7 +45,7 @@ export default class Board {
         outline: {
             base: "none",
             hover: "#e50bbd99",
-            selected: "#e50bbd99"
+            selected: "#b80fc7"
         },
         path: {
             base: "#b80fc755",
@@ -75,7 +77,7 @@ export default class Board {
     private interactable = true;
     private selectedPiece: SelectedPiece = null;
     private placeholderSet: { [pos: string]: boolean; } = {};
-    private movePaths: MovePaths = { normal: () => [], pillbug: () => [] };
+    private movePaths: PathMap<LatticeCoords> = () => [];
     private movePathHandle: Sel<SVGPathElement>;
 
     // pan & zoom tracking
@@ -109,27 +111,12 @@ export default class Board {
                 .attr("id", bug)
                 .attr("d", path));
 
-        // define rounded hex path
-        defs.append("path")
-            .attr("id", "hex")
-            .attr("d", Board.roundedHexPath(hexRadius, cornerRad));
+        // define rounded hex path & placeholder
+        Board.defineRoundedHex(defs, hexRadius, cornerRad);
         Board.definePlaceholder(defs, 0.6 * hexRadGap);
 
-        // create path object for showing bug movement paths
-        const dashLen: [number, number] = [16, 12];
-        this.movePathHandle = this.playArea.append("path")
-            .style("fill", "none")
-            .style("stroke-width", "8px")
-            .style("stroke-dasharray", dashLen.join(","))
-            .style("pointer-events", "none");
-
-        const animate = () => this.movePathHandle
-            .transition()
-            .ease(easeLinear)
-            .duration(2000)
-            .styleTween("stroke-dashoffset", () => t => `${t * (dashLen[0] + dashLen[1])}`)
-            .on("end", animate);
-        animate();
+        // create element for bug movement paths
+        this.movePathHandle = this.createMovePath(8, 2000);
 
         // precalculate other dimensions
         const playAreaBBox = svgContainer.node()?.getBoundingClientRect();
@@ -140,13 +127,14 @@ export default class Board {
     }
 
     /**
-     * Get path definition string for a hexagon of given radius with rounded corners of given radius.
-     * 
+     * Add definition for hexagon of given radius, with rounded corners of given radius, to given
+     * SVG 'defs' element for later reference by ID "hex".
+     *
+     * @param defs SVG defs element to which to append rounded hex definition
      * @param hexRad radius of circle in which un-rounded hexagon fits snugly
      * @param cornerRad radius of circle arcs to use for rounding corners (cuts off corner)
-     * @returns SVG path definition string ('d' attribute of <path>) for rounded hexagon
      */
-    private static roundedHexPath(hexRad: number, cornerRad: number): string {
+    private static defineRoundedHex(defs: Sel<SVGDefsElement>, hexRad: number, cornerRad: number): void {
         const thirdPi: number = Math.PI / 3;
         const innerRad: number = hexRad - 2 * cornerRad / Math.sqrt(3);
 
@@ -161,19 +149,55 @@ export default class Board {
             hexPath += `${i ? "L" : "M"}${x1},${y1}` // move/line to (x1,y1)
                 + `A${cornerRad},${cornerRad},0,0,0,${x2},${y2}`; // arc to (x2,y2)
         }
-        return hexPath + "Z"; // close path
+        hexPath += "Z"; // close path
+
+        defs.append("path")
+            .attr("id", "hex")
+            .attr("d", hexPath);
     }
 
+    /**
+     * Add definition of placeholders to given SVG 'defs' element for later reference by ID "placeholder".
+     * 
+     * @param defs SVG defs element to which to append placeholder definition
+     * @param strokeWidth stroke width to use for placeholders
+     */
     private static definePlaceholder(defs: Sel<SVGDefsElement>, strokeWidth: number): void {
-        const handle = defs.append("g")
+        const groupHandle = defs.append("g")
             .attr("id", "placeholder")
             .style("stroke-width", `${strokeWidth}px`);
         [0.95, 0.6].forEach((scale, index) => {
-            const outline = handle.append("use")
+            const outline = groupHandle.append("use")
                 .attr("xlink:href", "#hex")
                 .attr("transform", `scale(${scale})`);
             if (index === 0) outline.style("stroke-dasharray", "8,4");
         });
+    }
+
+    /**
+     * Create SVG path element for use in displaying movement paths of bug tiles; configure dash animation
+     * on this path; add path to play area; finally, return path.
+     * 
+     * @param strokeWidth stroke width of path
+     * @param animDuration duration for animation of dashes 'sliding' along path
+     * @returns handle for newly-created path element
+     */
+    private createMovePath(strokeWidth: number, animDuration: number): Sel<SVGPathElement> {
+        const dashLen: [number, number] = [16, 12];
+        const pathHandle = this.playArea.append("path")
+            .style("fill", "none")
+            .style("stroke-width", `${strokeWidth}px`)
+            .style("stroke-dasharray", dashLen.join(","))
+            .style("pointer-events", "none");
+
+        const animate = () => pathHandle
+            .transition()
+            .ease(easeLinear)
+            .duration(animDuration)
+            .styleTween("stroke-dashoffset", () => t => `${t * (dashLen[0] + dashLen[1])}`)
+            .on("end", animate);
+        animate();
+        return pathHandle;
     }
 
     /**
@@ -211,18 +235,26 @@ export default class Board {
         });
     }
 
+    /**
+     * Set global flag which determines whether the board is interactable or not - that is, whether tiles
+     * / placeholders can be clicked.
+     * 
+     * @param interactable whether board is interactable
+     */
     public setInteractable(interactable: boolean): void {
         this.interactable = interactable;
-        if (!interactable) this.clearPlaceholders();
+        if (!interactable) this.clearSelection();
     }
 
     /**
-     * Spawn tile representing given piece at given location. 
+     * Spawn tile representing given piece at given location.
      *
      * @param piece piece (color & insect-type) which tile should represent
      * @param pos position of tile in lattice coordinates
      */
     public spawnTile(piece: Piece, pos: LatticeCoords): void {
+        this.clearSelection();
+
         // spawn tile
         const [x, y] = this.convertCoordinates(...pos);
         const handle = this.playArea
@@ -234,7 +266,7 @@ export default class Board {
             .attr("xlink:href", "#hex")
             .style("fill", Board.colors.tile[piece.color])
             .style("stroke-width", `${this.hexRadGap * Math.sqrt(3)}px`);
-        if (this.interactable) this.bindTile(piece, handle, pos); // bind mouse events
+        if (this.interactable) this.bindTile(handle, piece, pos); // bind mouse events
 
         // add centered bug icon
         const strokeWidth = piece.type === "Pillbug" ? 1 : 0;
@@ -248,10 +280,10 @@ export default class Board {
         const { height, width } = bug.node()?.getBoundingClientRect() || { height: 120, width: 100 };
         const scale: number = Board.bugScales[piece.type] * this.hexRadius / height;
         bug.attr("transform", `scale(${scale})`
-            + `translate(-${width / 2 - 2 * strokeWidth},-${height / 2})`);
+            + `translate(-${width / 2 - 2 * strokeWidth},-${height / 2})scale(${this.zoom})`);
     }
 
-    private bindTile(piece: Piece, handle: Sel<SVGGElement>, pos: LatticeCoords): void {
+    private bindTile(handle: Sel<SVGGElement>, piece: Piece, pos: LatticeCoords): void {
         const thisIsSelected = () => this.selectedPiece?.pos[0] === pos[0]
             && this.selectedPiece.pos[1] === pos[1];
         const hex = handle.selectChild("use");
@@ -260,14 +292,12 @@ export default class Board {
             if (!this.selectedPiece || thisIsSelected()) {
                 hex.style("stroke", Board.colors.outline.hover);
                 handle.style("cursor", "pointer");
-            } else {
-                handle.style("cursor", "default");
-            }
+            } else handle.style("cursor", "default");
         });
 
         handle.on("mouseleave", () => {
             if (!this.selectedPiece) {
-                hex.style("stroke", "none");
+                hex.style("stroke", Board.colors.outline.base);
             } else if (thisIsSelected()) {
                 hex.style("stroke", Board.colors.outline.selected);
             }
@@ -275,101 +305,108 @@ export default class Board {
 
         handle.on("mousedown", (e: MouseEvent) => {
             e.stopImmediatePropagation();
+            this.gameClient.cancelPremove();
+            // TODO visually clear any premove indicators as well
 
             if (!this.selectedPiece) {
-                const checkOutcome = this.gameClient.checkPieceForMove(piece);
+                // process legal moves if any exist
+                const { outcome, premove } = this.gameClient.checkPieceForMove(piece);
                 let hasLegalMoves = false;
-
-                // spawn regular placeholders
-                if (checkOutcome.outcome === "Success") {
-                    const generator = this.gameClient.game.generateLegalMoves(piece);
-                    let next = generator.next();
-                    while (!next.done) {
-                        this.spawnPlaceholder(next.value, checkOutcome.premove);
-                        hasLegalMoves = true;
-                        next = generator.next();
+                if (outcome === "Success" || outcome === "OnlyByPillbug") {
+                    if (outcome === "Success") {
+                        if (this.processLegalMoves(piece, false, premove)) hasLegalMoves = true;
                     }
-                    this.movePaths.normal = next.value;
-                }
-
-                // spawn pillbug special-move placeholders
-                if (checkOutcome.outcome === "Success" || checkOutcome.outcome === "OnlyByPillbug") {
-                    const pillbugMoves = this.gameClient.game.getPillbugMoves(piece);
-                    for (const dest of pillbugMoves.destinations) {
-                        this.spawnPlaceholder(dest, true, checkOutcome.premove);
-                        hasLegalMoves = true;
-                    }
-                    this.movePaths.pillbug = pillbugMoves.pathMap;
+                    if (this.processLegalMoves(piece, true, premove)) hasLegalMoves = true;
                 }
 
                 // select tile if it has legal moves
                 if (hasLegalMoves) {
-                    this.selectedPiece = { piece, pos };
+                    this.selectedPiece = { hex, piece, pos };
                     hex.style("stroke", Board.colors.outline.selected);
                 } else {
-                    // handle clicking of piece with no legal moves
-                    const transform = handle.attr("transform");
-                    let shakes = 3;
-                    const animate = () => {
-                        if (shakes-- > 0) handle.transition()
-                            .duration(90)
-                            .attrTween("transform", () => t => `${transform} rotate(${5.5 * Math.sin(t * Math.PI)})`)
-                            .on("end", animate);
-                        else handle.attr("transform", transform);
-                    };
-                    if (!transform.match(/rotate/g)) animate();
-
-                    console.error(`No legal moves: checkPieceForMove() returned ${checkOutcome.outcome}`);
+                    this.shakeTile(handle);
+                    console.error(`No legal moves: ${outcome}`);
                 }
             } else if (thisIsSelected()) {
+                this.clearSelection();
                 hex.style("stroke", Board.colors.outline.hover);
-                this.selectedPiece = null;
-                this.clearPlaceholders();
             }
         });
     }
 
-    private spawnPlaceholder(pos: LatticeCoords, pillbug?: boolean, premove?: boolean): void {
-        // TODO handle special behaviour for premoves
+    /**
+     * Animate tile with given handle to "shake" (rotate back and forth by small increment), to indicate
+     * some user error (such as clicking tile with no legal moves).
+     * 
+     * @param handle selection handle containing tile
+     * @param shakes number of full shake cycles to animate
+     */
+    private shakeTile(handle: Sel<SVGGElement>, shakes?: number): void {
+        const transform = handle.attr("transform");
+        let iterations = shakes || 3;
+        const animate = () => {
+            if (iterations-- > 0) handle.transition()
+                .duration(90)
+                .attrTween("transform", () => t => `${transform} rotate(${5.5 * Math.sin(t * Math.PI)})`)
+                .on("end", animate);
+            else handle.attr("transform", transform);
+        };
+        if (!transform.match(/rotate/g)) animate();
+    }
+
+    /**
+     * Call appropriate methods to retrieve all legal moves for given piece (either using or ignoring special
+     * power of an adjacent pillbug, as specified); spawn a placeholder at each legal move destination, and
+     * merge legal move paths with global PathMap object; finally, return whether any legal moves were found.
+     * 
+     * @param piece piece for which to process legal moves
+     * @param viaPillbug if true/false, check for moves specifically using/ignoring pillbug special ability
+     * @param premove whether moves are being considered out-of-turn as premoves
+     * @returns whether any legal moves were found (and processed)
+     */
+    private processLegalMoves(piece: Piece, viaPillbug: boolean, premove: boolean): boolean {
+        const generator = this.gameClient.generateLegalMoves(piece, viaPillbug);
+        let next = generator.next();
+        let hasLegalMoves = false;
+        while (!next.done) {
+            this.spawnPlaceholder(next.value, viaPillbug, premove);
+            hasLegalMoves = true;
+            next = generator.next();
+        }
+        this.movePaths = GraphUtils.mergePathMaps(this.movePaths, next.value);
+        return hasLegalMoves;
+    }
+
+    private spawnPlaceholder(pos: LatticeCoords, viaPillbug: boolean, premove: boolean): void {
+        // TODO color premove placeholders differently
 
         if (!this.placeholderSet[pos.join(",")]) {
             const [x, y] = this.convertCoordinates(...pos);
             const handle = this.playArea.append("use")
                 .attr("xlink:href", "#placeholder")
                 .attr("class", "placeholder")
-                .style("stroke", Board.colors.placeholder[pillbug ? "pillbug" : "base"])
+                .style("stroke", Board.colors.placeholder[viaPillbug ? "pillbug" : "base"])
                 .style("fill", "#ffffff00")
                 .attr("transform", `translate(${x},${y})`);
 
-            if (this.interactable) this.bindPlaceholder(pos, handle, pillbug);
+            if (this.interactable) this.bindPlaceholder(pos, handle, viaPillbug, premove);
             this.placeholderSet[pos.join(",")] = true;
         }
     }
 
-    private clearPlaceholders(): void {
-        selectAll(".placeholder").remove();
-        this.placeholderSet = {};
-        this.movePaths = { normal: () => [], pillbug: () => [] };
-        this.movePathHandle.attr("d", "");
-    }
+    private bindPlaceholder(pos: LatticeCoords, handle: Sel<SVGUseElement>, viaPillbug: boolean, premove: boolean): void {
+        // TODO color premove placeholders differently
 
-    public clearBoard(): void {
-        this.clearPlaceholders();
-        selectAll(".tile").remove();
-    }
-
-    private bindPlaceholder(pos: LatticeCoords, handle: Sel<SVGUseElement>, pillbug?: boolean): void {
         handle.on("mouseenter", () => {
             if (this.selectedPiece) {
-                handle.style("fill", Board.colors.placeholder[pillbug ? "pillbugHover" : "hover"]);
+                handle.style("fill", Board.colors.placeholder[viaPillbug ? "pillbugHover" : "hover"]);
                 handle.style("cursor", "pointer");
 
                 const coordMap = (p: LatticeCoords) => this.convertCoordinates(...p).join(",");
                 this.movePathHandle
                     .raise()
-                    .style("stroke", Board.colors.path[pillbug ? "pillbug" : "base"])
-                    .attr("d", `M${coordMap(pos)}L`
-                        + this.movePaths[pillbug ? "pillbug" : "normal"](pos).map(coordMap).join("L"));
+                    .style("stroke", Board.colors.path[viaPillbug ? "pillbug" : "base"])
+                    .attr("d", `M${coordMap(pos)}L` + this.movePaths(pos).map(coordMap).join("L"));
             }
         });
 
@@ -381,14 +418,35 @@ export default class Board {
         handle.on("mousedown", (e: MouseEvent) => e.stopImmediatePropagation());
         handle.on("mouseup", () => {
             if (this.selectedPiece) {
-                this.gameClient.makeMoveRequest(this.selectedPiece.piece, pos);
-                this.selectedPiece = null;
-                this.clearPlaceholders();
+                this.gameClient.makeMoveOrPremove(this.selectedPiece.piece, pos);
+                this.clearSelection();
             }
         });
     }
 
+    /**
+     * Reset selection, delete all placeholders, reset movement paths, and clear selection outline.
+     */
+    private clearSelection(): void {
+        selectAll(".placeholder").remove();
+        this.selectedPiece?.hex.style("stroke", Board.colors.outline.base);
+        this.selectedPiece = null;
+        this.placeholderSet = {};
+        this.movePaths = () => [];
+        this.movePathHandle.attr("d", "");
+    }
+
+    /**
+     * Remove all tiles and placeholders, effectively resetting board visually.
+     */
+    public clearBoard(): void {
+        this.clearSelection();
+        selectAll(".tile").remove();
+    }
+
     public moveTile(piece: Piece, destination: LatticeCoords): void {
+        this.clearSelection();
+
         let [x, y] = this.convertCoordinates(...destination);
         if (piece.height && piece.height > 1) {
             // TODO render this better
@@ -399,7 +457,7 @@ export default class Board {
         const handle = select(`#${Notation.pieceToString(piece)}`)
             .raise();
         handle.selectChild("use")
-            .style("stroke", "none");
+            .style("stroke", Board.colors.outline.base);
         handle.transition()
             .duration(150)
             .ease(easeCubic)
@@ -407,9 +465,9 @@ export default class Board {
     }
 
     /**
-     * Convert between lattice coordinates - integer coefficients for lattice base
-     * vectors (joining centers of adjacent hexagons lying along the horizontal and
-     * along a pi/3 elevation), and screen-space xy-coordinates used by SVG.
+     * Convert between lattice coordinates - integer coefficients for lattice base vectors
+     * (joining centers of adjacent hexagons lying along the horizontal and along a pi/3 elevation),
+     * and screen-space xy-coordinates used by SVG.
      * 
      * @param u coefficient of horizontal lattice base vector
      * @param v coefficient of lattice base vector along pi/3 elevation

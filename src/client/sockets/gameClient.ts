@@ -6,17 +6,22 @@ import sum from "@/common/objectHash";
 import HiveGame from "@/common/game/game";
 
 import type { ClientToServer, GameState, ServerToClient, TurnEventOutcome } from "@/types/common/socket";
-import type { TurnOutcome, TurnRequest } from "@/types/common/turn";
+import type { GenericTurnOutcome, GenericTurnRequest } from "@/types/common/turn";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
 import type { Piece, PieceColor } from "@/types/common/piece";
-import type { MovementCheckOutcome } from "@/types/common/game/game";
+import type { MoveGenerator, MovementCheckOutcome } from "@/types/common/game/game";
 
-interface MovementCheckOutcomePremove {
+interface MoveAvailability {
     outcome: MovementCheckOutcome;
     premove: boolean;
 }
 
-// TODO determine this based on screen size?
+interface Premove {
+    piece: Piece;
+    destination: LatticeCoords;
+}
+
+// TODO determine this based on screen size, or make it a setting
 const hexRad = 90;
 
 export default class GameClient {
@@ -25,11 +30,14 @@ export default class GameClient {
     private timeout: number;
 
     // game related
-    public game: HiveGame = new HiveGame();
+    private game: HiveGame = new HiveGame();
     private board: Board = new Board(this, hexRad, hexRad / 6, hexRad / 18);
 
     private playerColor?: PieceColor;
     private startingColor?: PieceColor;
+
+    // premoves
+    private premove?: Premove;
 
     constructor(timeout?: number) {
         this.socket = io(document.location.pathname, {
@@ -41,7 +49,7 @@ export default class GameClient {
 
     private bindSocketEvents() {
         this.socket.on("connect", () => {
-            void this.processTurns(
+            void this.processTurns( // TODO for dev debugging only
                 "bA .",
                 "wG bA1-",
                 "bB /bA1",
@@ -97,7 +105,8 @@ export default class GameClient {
                 }
             }
 
-            // TODO send pending premove request here
+            // dispatch any pending premove
+            if (this.premove) this.submitMoveRequest(this.premove.piece, this.premove.destination);
         });
 
         this.socket.on("Player connected", () => {
@@ -131,12 +140,12 @@ export default class GameClient {
 
     // TODO find some way of merging these functions...
 
-    public async processTurns(...turn: TurnRequest[]): Promise<TurnOutcome[]>;
-    public async processTurns(...turnNotation: string[]): Promise<(TurnOutcome | ParseError)[]>;
-    public async processTurns(...turnOrNotation: string[] | TurnRequest[]): Promise<(TurnEventOutcome | ParseError)[]> {
+    public async processTurns(...turn: GenericTurnRequest[]): Promise<GenericTurnOutcome[]>;
+    public async processTurns(...turnNotation: string[]): Promise<(GenericTurnOutcome | ParseError)[]>;
+    public async processTurns(...turnOrNotation: string[] | GenericTurnRequest[]): Promise<(TurnEventOutcome | ParseError)[]> {
         const result: (TurnEventOutcome | ParseError)[] = [];
         for (const tON of turnOrNotation) {
-            let turn: TurnRequest | ParseError;
+            let turn: GenericTurnRequest | ParseError;
             if (typeof tON === "string") {
                 turn = Notation.stringToTurnRequest(tON);
                 if (turn === "ParseError") {
@@ -145,7 +154,7 @@ export default class GameClient {
                 }
             } else turn = tON;
 
-            const [outcome, hash] = await this.makeTurnRequest(turn);
+            const [outcome, hash] = await this.submitTurnRequest(turn);
             console.log(outcome);
             console.log(`New hash: ${hash}`);
 
@@ -164,12 +173,13 @@ export default class GameClient {
         return result;
     }
 
-    private makeTurnRequest(req: TurnRequest): Promise<[TurnEventOutcome, string]> {
+    private submitTurnRequest(req: GenericTurnRequest): Promise<[TurnEventOutcome, string]> {
         return new Promise(resolve =>
             this.socket.emit("turn request", req, (outcome, hash) => resolve([outcome, hash])));
     }
 
-    public makeMoveRequest(piece: Piece, destination: LatticeCoords): void {
+    private submitMoveRequest(piece: Piece, destination: LatticeCoords): void {
+        this.cancelPremove();
         this.socket.emit("move request", piece, destination, (outcome, hash) => {
             console.log(outcome);
             console.log(`New hash: ${hash}`);
@@ -182,11 +192,30 @@ export default class GameClient {
         });
     }
 
-    public checkPieceForMove(piece: Piece): MovementCheckOutcomePremove {
+    public makeMoveOrPremove(piece: Piece, destination: LatticeCoords): void {
+        if (this.playerColor === this.game.getCurrTurnColor()) {
+            this.submitMoveRequest(piece, destination);
+        } else {
+            // currently out-of-turn; register premove
+            this.premove = { destination, piece };
+        }
+    }
+
+    public cancelPremove(): void {
+        this.premove = undefined;
+    }
+
+    // NOTE thin wrapper around function of (local) HiveGame instance
+    public checkPieceForMove(piece: Piece): MoveAvailability {
         return {
             outcome: this.game.checkPieceForMove(piece, undefined, this.playerColor),
             premove: this.playerColor !== this.game.getCurrTurnColor()
         };
+    }
+
+    // NOTE thin wrapper around function of (local) HiveGame instance
+    public generateLegalMoves(piece: Piece, viaPillbug: boolean): MoveGenerator {
+        return this.game.generateLegalMoves(piece, viaPillbug, this.playerColor);
     }
 
     private syncState(): void {

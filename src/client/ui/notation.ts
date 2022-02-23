@@ -2,7 +2,7 @@ import { pieceInventory } from "@/common/piece";
 import { Bugs, Colors } from "@/common/piece";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
-import type { TurnRequest } from "@/types/common/turn";
+import type { GenericTurnRequest } from "@/types/common/turn";
 import type { Direction } from "@/types/common/game/hexGrid";
 
 export type ParseError = "ParseError";
@@ -47,7 +47,7 @@ export default class Notation {
         return prefix;
     }
 
-    public static stringToTurnRequest(notation: string): TurnRequest | ParseError {
+    public static stringToTurnRequest(notation: string): GenericTurnRequest | ParseError {
         // special pass move
         if (notation.toLowerCase() === "pass") return "Pass";
 
@@ -81,7 +81,7 @@ export default class Notation {
         };
     }
 
-    public static turnRequestToString(turn: TurnRequest): string {
+    public static turnRequestToString(turn: GenericTurnRequest): string {
         if (turn === "Pass") return "pass";
         let destination = ".";
         if (turn.destination !== "Anywhere") {
