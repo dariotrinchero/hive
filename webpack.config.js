@@ -10,34 +10,22 @@ module.exports = (_env, args) => {
         optimization: { usedExports: true },
         resolve: {
             alias: { '@': path.resolve(__dirname, 'src') },
-            extensions: [ '.tsx', '.ts', '.js', '.d.ts' ],
+            extensions: [ '.tsx', '.ts', '.js', '.d.ts', '.scss' ],
+        },
+        module: {
+            rules: [
+                {
+                    test: /\.tsx?$/,
+                    loader: 'ts-loader',
+                    exclude: /node_modules/,
+                },
+                {
+                    test: /\.(s(a|c)ss)$/,
+                    use: [ 'style-loader', 'css-loader', 'sass-loader' ]
+                }
+            ],
         },
     });
-    const tsRule = {
-        test: /\.tsx?$/,
-        loader: 'ts-loader',
-        exclude: /node_modules/,
-    };
-
-    // Dev-server config:
-    const devServer = args => args.mode !== "development" ? {} : {
-        devServer: {
-            static: {
-                directory: path.resolve(__dirname, 'dist/client'),
-                publicPath: '/'
-            },
-            compress: true,
-            hot: false,
-            port: 3000,
-            proxy: {
-                '/socket.io': {
-                    target: 'ws://localhost:3001',
-                    ws: true,
-                    secure: false
-                },
-            },
-        },
-    };
 
     return [
         {
@@ -49,7 +37,6 @@ module.exports = (_env, args) => {
                 path: path.resolve(__dirname, 'dist/server'),
                 clean: true
             },
-            module: { rules: [ tsRule ], },
             target: 'node',
             externals: [ nodeExternals() ],
             ...common(args),
@@ -57,20 +44,11 @@ module.exports = (_env, args) => {
         {
             // Client webpage:
             name: 'client',
-            entry: './src/client/index.ts',
+            entry: './src/client/app.tsx',
             output: {
                 filename: '[name].[contenthash].js',
                 path: path.resolve(__dirname, 'dist/client'),
                 clean: true
-            },
-            module: {
-                rules: [
-                    tsRule,
-                    {
-                        test: /\.(png|svg|jpg|jpeg|gif)$/i,
-                        type: 'asset/resource',
-                    },
-                ],
             },
             plugins: [
                 new HtmlWebpackPlugin({ // emit index.html with injected script tag referencing bundle
@@ -78,7 +56,6 @@ module.exports = (_env, args) => {
                     template: path.resolve(__dirname, 'index.html'),
                 }),
             ],
-            ...devServer(args),
             ...common(args),
         }
     ];

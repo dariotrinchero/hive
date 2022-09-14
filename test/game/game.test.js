@@ -1,5 +1,5 @@
 const { default: HiveGame } = require("@/common/game/game");
-const { default: Notation } = require("@/client/ui/notation");
+const { default: Notation } = require("@/client/utility/notation");
 
 let game = null;
 

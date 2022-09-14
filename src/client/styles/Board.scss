@@ -1,0 +1,26 @@
+// Length of move path dashes
+$dashon: 16;
+$dashoff: 12;
+
+.move-path {
+    stroke: #b80fc755;
+    stroke-width: 8px;
+    fill: none;
+    stroke-dasharray: $dashon, $dashoff;
+    pointer-events: none;
+    animation: 2s linear 0s infinite normal none running dashflow;
+
+    &.pillbug {
+        stroke: #46a088bb;
+    }
+}
+
+@keyframes dashflow {
+    from {
+        stroke-dashoffset: 0;
+    }
+
+    to {
+        stroke-dashoffset: $dashon + $dashoff;
+    }
+}

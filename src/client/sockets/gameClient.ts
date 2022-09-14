@@ -1,7 +1,6 @@
 import { io, Socket } from "socket.io-client";
 
-import Board from "@/client/ui/board";
-import Notation, { ParseError } from "@/client/ui/notation";
+import Notation, { ParseError } from "@/client/utility/notation";
 import sum from "@/common/objectHash";
 import HiveGame from "@/common/game/game";
 
@@ -11,7 +10,7 @@ import type { LatticeCoords } from "@/types/common/game/hexGrid";
 import type { Piece, PieceColor } from "@/types/common/piece";
 import type { MoveGenerator, MovementCheckOutcome } from "@/types/common/game/game";
 
-interface MoveAvailability {
+export interface MoveAvailability {
     outcome: MovementCheckOutcome;
     premove: boolean;
 }
@@ -21,29 +20,33 @@ interface Premove {
     destination: LatticeCoords;
 }
 
-// TODO determine this based on screen size, or make it a setting
-const hexRad = 90;
-
 export default class GameClient {
     // networking related
     private socket: Socket<ServerToClient, ClientToServer>;
-    private timeout: number;
 
     // game related
-    private game: HiveGame = new HiveGame();
-    private board: Board = new Board(this, hexRad, hexRad / 6, hexRad / 18);
-
+    private game: HiveGame;
     private playerColor?: PieceColor;
-    private startingColor?: PieceColor;
 
     // premoves
     private premove?: Premove;
 
-    constructor(timeout?: number) {
+    // callbacks for rendering
+    private spectate: () => void;
+    private refreshRendering: (state: GameState) => void;
+
+    constructor(
+        game: HiveGame,
+        spectate: () => void,
+        refreshRendering: (state: GameState) => void
+    ) {
+        this.game = game;
+        this.spectate = spectate;
+        this.refreshRendering = refreshRendering;
+
         this.socket = io(document.location.pathname, {
             auth: { sessionId: localStorage.getItem("sessionId") }
         });
-        this.timeout = timeout || 5000;
         this.bindSocketEvents();
     }
 
@@ -74,11 +77,8 @@ export default class GameClient {
 
             if (session.spectating) {
                 console.error("Game full; joined as spectator.");
-                this.board.setInteractable(false);
-            } else {
-                this.playerColor = session.color;
-                this.startingColor = session.startingColor;
-            }
+                this.spectate();
+            } else this.playerColor = session.color;
 
             this.game.setColorToStart(session.startingColor);
         });
@@ -99,10 +99,7 @@ export default class GameClient {
 
                 // check hash & request state sync in case of mismatch
                 if (hash !== sum(this.game.getState())) this.syncState();
-                else {
-                    if (outcome.turnType === "Movement") this.board.moveTile(piece, destination);
-                    else this.board.spawnTile(piece, destination);
-                }
+                else this.refreshRendering(this.game.getState());
             }
 
             // dispatch any pending premove
@@ -127,15 +124,16 @@ export default class GameClient {
     }
 
     /**
-     * Helper function to race any given promise against the established timeout.
+     * Helper function to race any given promise against given timeout.
      * 
      * @param promise the promise to race against a timeout
+     * @param timeout the time to wait before rejecting the given promise
      * @returns a new promise of the same type as that given which rejects if time runs out
      */
-    private raceTimeout<T>(promise: Promise<T>): Promise<T> { // TODO delete this function?
-        const timeout: Promise<T> = new Promise((_resolve, reject) =>
-            setTimeout(() => reject("Request timed out."), this.timeout));
-        return Promise.race([timeout, promise]);
+    private raceTimeout<T>(promise: Promise<T>, timeout?: number): Promise<T> { // TODO delete this function?
+        const delayedReject: Promise<T> = new Promise((_resolve, reject) =>
+            setTimeout(() => reject("Request timed out."), timeout || 5000));
+        return Promise.race([delayedReject, promise]);
     }
 
     // TODO find some way of merging these functions...
@@ -161,11 +159,7 @@ export default class GameClient {
             if (outcome.status === "Success") {
                 this.game.processTurn(turn);
                 if (hash !== sum(this.game.getState())) this.syncState();
-                else {
-                    if (outcome.turnType === "Placement") this.board.spawnTile(outcome.piece, outcome.destination);
-                    else if (outcome.turnType === "Movement") this.board.moveTile(outcome.piece, outcome.destination);
-                }
-
+                else this.refreshRendering(this.game.getState());
             }
 
             result.push(outcome);
@@ -187,7 +181,7 @@ export default class GameClient {
             if (outcome.status === "Success") {
                 this.game.movePiece(piece, destination);
                 if (hash !== sum(this.game.getState())) this.syncState();
-                else this.board.moveTile(piece, destination);
+                else this.refreshRendering(this.game.getState());
             }
         });
     }
@@ -225,19 +219,8 @@ export default class GameClient {
 
     private loadState(state: GameState): void {
         console.log(`Loading state with client-side hash ${sum(state)}:`);
-
-        this.board.clearBoard();
         this.game = HiveGame.fromState(state);
-
-        Object.entries(state.posToPiece).forEach(([posStr, piece]) => {
-            const pos = posStr.split(",").map(str => parseInt(str)) as LatticeCoords;
-            const recordPiece = (currPiece: Piece) => {
-                if (currPiece.covering) recordPiece(currPiece.covering);
-                this.board.spawnTile(currPiece, pos);
-            };
-            recordPiece(piece);
-        });
-
+        this.refreshRendering(this.game.getState());
         console.log(`Loaded state has client-side hash ${sum(this.game.getState())}:`);
     }
 }

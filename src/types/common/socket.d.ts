@@ -46,6 +46,7 @@ export type ClientSession = PlayerSession | SpectatorSession;
 
 // game state
 export interface GameState {
+    // TODO make game history (ie. notation of past moves) part of state
     turnCount: number;
     currTurnColor: PieceColor;
     movedLastTurn: LastMoveDestination;
