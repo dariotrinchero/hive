@@ -28,7 +28,7 @@ export default abstract class HexGrid {
         };
     }
 
-    protected static eqPos(pos1: LatticeCoords, pos2: LatticeCoords) {
+    public static eqPos(pos1: LatticeCoords, pos2: LatticeCoords) {
         return pos1[0] === pos2[0] && pos1[1] === pos2[1];
     }
 

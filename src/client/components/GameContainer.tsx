@@ -14,6 +14,8 @@ export interface MoveAvailability {
     premove: boolean;
 }
 
+// TODO maybe it is wasteful to duplicate this data here and in the HiveGame object, but
+// maybe it is sensible for having clean separation of rendering & game logic?
 interface GameContainerState extends GameState {
     spectating: boolean;
 }
@@ -23,7 +25,6 @@ export default class GameContainer extends Component<Record<string, never>, Game
 
     public constructor() {
         super();
-
         this.state = {
             ...HiveGame.initialState(),
             spectating: false
