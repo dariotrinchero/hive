@@ -44,15 +44,32 @@ export default class HiveGame extends HexGrid {
             Black: { ...pieceInventory },
             White: { ...pieceInventory }
         };
-        this.currTurnColor = colorToStart || "Black";
-        this.movedLastTurn = { Black: null, White: null };
+        const init: GameState = HiveGame.initialState(colorToStart);
+        this.currTurnColor = init.currTurnColor;
+        this.movedLastTurn = init.movedLastTurn;
+        this.turnCount = init.turnCount;
+        this.posToPiece = init.posToPiece;
         this.placementCount = { Black: 0, White: 0 };
-        this.turnCount = 0;
         this.gameStatus = "Ongoing";
     }
 
+    public static initialState(colorToStart?: PieceColor): GameState {
+        return {
+            currTurnColor: colorToStart || "Black",
+            movedLastTurn: { Black: null, White: null },
+            posToPiece: {},
+            turnCount: 0
+        };
+    }
+
+    /**
+     * Obtain game instance from given game state.
+     * 
+     * @param state desired game state
+     * @returns instance of HiveGame with the given state
+     */
     public static fromState(state: GameState): HiveGame {
-        const game = new HiveGame("Black");
+        const game = new HiveGame();
         game.turnCount = state.turnCount;
         game.currTurnColor = state.currTurnColor;
         game.movedLastTurn = state.movedLastTurn;

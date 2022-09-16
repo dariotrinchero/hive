@@ -1,4 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { Component, createRef, Fragment, h, RefObject } from "preact";
 
 import "@/client/styles/Board";
@@ -8,11 +7,11 @@ import type { LatticeCoords, PosToPiece } from "@/types/common/game/hexGrid";
 import type { MoveGenerator } from "@/types/common/game/game";
 import type { PathMap } from "@/types/common/game/graph";
 import type { Piece } from "@/types/common/piece";
-import type { MoveAvailability } from "@/client/sockets/gameClient";
 
 import GraphUtils from "@/common/game/graph";
 
 import Tile, { HexDimensions, PieceTileState } from "@/client/components/Tile";
+import type { MoveAvailability } from "@/client/components/GameContainer";
 
 export interface BoardProps {
     // board layout
@@ -35,7 +34,9 @@ interface BoardState {
         to: LatticeCoords;
         viaPillbug: boolean;
         pathMap: PathMap<LatticeCoords>;
-        placeholders: { [pos: string]: boolean; };
+        placeholders: {
+            [pos: string]: boolean; // true/false represent pillbug/normal placeholder
+        };
     };
     transform: { // pan & zoom tracking
         pan: ScreenCoords;
@@ -71,7 +72,7 @@ export default class Board extends Component<BoardProps, BoardState> {
                 from: null,
                 pathMap: () => [],
                 placeholders: {},
-                to: [0, 0],
+                to: [NaN, NaN],
                 viaPillbug: false
             },
             transform: {
@@ -116,34 +117,41 @@ export default class Board extends Component<BoardProps, BoardState> {
     }
 
     /**
-     * Call appropriate methods to retrieve all legal moves for given piece (either using or ignoring special
-     * power of an adjacent pillbug, as specified); record a placeholder at each legal move destination, and
-     * merge legal move paths with global PathMap object; finally, return whether any legal moves were found.
+     * Call appropriate methods to retrieve all legal moves for given piece (either using or ignoring
+     * special power of an adjacent pillbug, as specified); record a placeholder at each legal move 
+     * destination, and merge legal move paths with global PathMap object; finally, return whether any 
+     * legal moves were found.
      * 
      * @param piece piece for which to process legal moves
-     * @param viaPillbug if true/false, check for moves specifically using/ignoring pillbug special ability
+     * @param viaPillbug if true/false, check for moves specifically using/ignoring pillbug ability
      * @returns whether any legal moves were found (and processed)
      */
     private processMoves(piece: Piece, viaPillbug: boolean): boolean {
-        const { placeholders, pathMap } = this.state.movePreview;
+        const newPlaceholders: { [pos: string]: boolean; } = {};
 
         const generator = this.props.getMoves(piece, viaPillbug);
         let next = generator.next();
         let hasLegalMoves = false;
         while (!next.done) {
             const posStr: string = next.value.join(",");
-            if (typeof placeholders[posStr] === "undefined") placeholders[posStr] = viaPillbug;
+            if (typeof newPlaceholders[posStr] === "undefined") newPlaceholders[posStr] = viaPillbug;
             hasLegalMoves = true;
             next = generator.next();
         }
+        const newPathMap: PathMap<LatticeCoords> = next.value;
 
-        this.setState({
-            movePreview: {
-                ...this.state.movePreview,
-                pathMap: GraphUtils.mergePathMaps(pathMap, next.value),
-                placeholders
-            }
+        this.setState((state: BoardState) => {
+            const { pathMap, placeholders } = state.movePreview;
+            return {
+                movePreview: {
+                    ...state.movePreview,
+                    pathMap: GraphUtils.mergePathMaps(pathMap, newPathMap),
+                    // older (non-pillbug) placeholders take preference here:
+                    placeholders: { ...newPlaceholders, ...placeholders }
+                }
+            };
         });
+
         return hasLegalMoves;
     }
 
@@ -151,14 +159,15 @@ export default class Board extends Component<BoardProps, BoardState> {
      * Reset selection, delete all placeholders, reset movement paths, and clear selection outline.
      */
     private clearSelection(): void {
-        this.setState({
+        this.setState((state: BoardState) => ({
             movePreview: {
-                ...this.state.movePreview,
+                ...state.movePreview,
                 from: null,
                 pathMap: () => [],
-                placeholders: {}
+                placeholders: {},
+                to: [NaN, NaN]
             }
-        });
+        }));
     }
 
     /**
@@ -168,12 +177,13 @@ export default class Board extends Component<BoardProps, BoardState> {
      * @param newZoom value to which to set zoom
      */
     private updateTransform(panDelta: [number, number], newZoom?: number): void {
-        const { pan, zoom } = this.state.transform;
-        pan[0] += panDelta[0];
-        pan[1] += panDelta[1];
-
-        this.setState({
-            transform: { ...this.state.transform, pan, zoom: newZoom || zoom }
+        this.setState((state: BoardState) => {
+            const { pan, zoom } = state.transform;
+            pan[0] += panDelta[0];
+            pan[1] += panDelta[1];
+            return {
+                transform: { ...state.transform, pan, zoom: newZoom || zoom }
+            };
         });
     }
 
@@ -209,9 +219,9 @@ export default class Board extends Component<BoardProps, BoardState> {
             }
         };
         const placeholderHover = (pos: LatticeCoords, viaPillbug: boolean) => {
-            this.setState({
-                movePreview: { ...this.state.movePreview, to: pos, viaPillbug }
-            });
+            this.setState((state: BoardState) => ({
+                movePreview: { ...state.movePreview, to: pos, viaPillbug }
+            }));
         };
 
         return (
@@ -249,15 +259,17 @@ export default class Board extends Component<BoardProps, BoardState> {
                 const { outcome } = this.props.checkForMove(piece); // TODO this does not distinguish premoves
                 let hasLegalMoves = false;
                 if (outcome === "Success" || outcome === "OnlyByPillbug") {
-                    if (outcome === "Success" && this.processMoves(piece, false)) hasLegalMoves = true;
+                    if (outcome === "Success") {
+                        if (this.processMoves(piece, false)) hasLegalMoves = true;
+                    }
                     if (this.processMoves(piece, true)) hasLegalMoves = true;
                 }
 
                 // select tile if it has legal moves
                 if (hasLegalMoves) {
-                    this.setState({
-                        movePreview: { ...this.state.movePreview, from: { piece, pos } }
-                    });
+                    this.setState((state: BoardState) => ({
+                        movePreview: { ...state.movePreview, from: { piece, pos } }
+                    }));
                 } else {
                     // this.shakeTile(handle); // TODO trigger CSS animation
                     console.error(`No legal moves: ${outcome}`);
@@ -296,9 +308,9 @@ export default class Board extends Component<BoardProps, BoardState> {
         // panning logic
         const { pan, zoom } = this.state.transform;
         const makeHandler = (newDragging: (b: number) => boolean) =>
-            (e: MouseEvent) => this.setState({
-                transform: { ...this.state.transform, dragging: newDragging(e.button) }
-            });
+            (e: MouseEvent) => this.setState((state: BoardState) => ({
+                transform: { ...state.transform, dragging: newDragging(e.button) }
+            }));
         const mouseDown = makeHandler(b => this.state.transform.dragging || b <= 1);
         const mouseUp = makeHandler(b => this.state.transform.dragging && b > 1);
         const mouseLeave = makeHandler(() => false);
@@ -325,12 +337,12 @@ export default class Board extends Component<BoardProps, BoardState> {
                 onWheel={this.handleZoom.bind(this)}
             >
                 <g transform={`translate(${pan.join(",")})scale(${zoom})`}>
+                    {this.renderPieceTiles(props)}
+                    {this.renderPlaceholders()}
                     <path
                         class={`move-path ${this.state.movePreview.viaPillbug ? "pillbug" : ""}`}
                         d={movePath}
                     />
-                    {this.renderPieceTiles(props)}
-                    {this.renderPlaceholders()}
                 </g>
             </svg>
         );

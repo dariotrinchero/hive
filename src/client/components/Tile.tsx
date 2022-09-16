@@ -74,14 +74,12 @@ const bugTransforms: Record<PieceType, BugTransform> = {
 };
 
 export default class Tile extends Component<TileProps> {
-    // flags for whether we still need to render <defs>
+    // flags to remember the first tile (which needs to render defs)
     private static atLeastOneTile = false;
     private firstTile;
 
     public constructor() {
         super();
-
-        // record whether this is the first tile (which needs to render defs)
         this.firstTile = !Tile.atLeastOneTile;
         Tile.atLeastOneTile = true;
     }
@@ -115,16 +113,16 @@ export default class Tile extends Component<TileProps> {
      * specifically, define the rounded hex path, placeholder, and each bug icon path. This is only
      * rendered by the first instance of the Tile class.
      * 
-     * @param props props of this component, containing hex grid dimensions
+     * @param size hex grid dimensions
      * @returns populated SVG defs tag
      */
-    private renderSVGDefs(props: TileProps): h.JSX.Element {
+    private renderSVGDefs(size: HexDimensions): h.JSX.Element {
         return (
             <defs>
-                <path id="hex" d={Tile.roundedHexPath(props.size.radius, props.size.cornerRad)} />
+                <path id="hex" d={Tile.roundedHexPath(size.radius, size.cornerRad)} />
                 <g
                     id="placeholder"
-                    style={`stroke-width: ${0.6 * props.size.gap}`}
+                    style={`stroke-width: ${0.6 * size.gap}`}
                 >
                     {[0.95, 0.6].map((scale, index) =>
                         <use
@@ -206,7 +204,7 @@ export default class Tile extends Component<TileProps> {
     public override render(props: TileProps): h.JSX.Element {
         return (
             <Fragment>
-                {this.firstTile ? this.renderSVGDefs(props) : null}
+                {this.firstTile ? this.renderSVGDefs(props.size) : null}
                 {props.tile.type === "Placeholder"
                     ? this.renderPlaceholder(props.pos, props.tile.viaPillbug)
                     : this.renderPieceTile(props.tile, props.pos)}

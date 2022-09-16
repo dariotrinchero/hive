@@ -8,12 +8,6 @@ import type { ClientToServer, GameState, ServerToClient, TurnEventOutcome } from
 import type { GenericTurnOutcome, GenericTurnRequest } from "@/types/common/turn";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
 import type { Piece, PieceColor } from "@/types/common/piece";
-import type { MoveGenerator, MovementCheckOutcome } from "@/types/common/game/game";
-
-export interface MoveAvailability {
-    outcome: MovementCheckOutcome;
-    premove: boolean;
-}
 
 interface Premove {
     piece: Piece;
@@ -21,26 +15,23 @@ interface Premove {
 }
 
 export default class GameClient {
-    // networking related
-    private socket: Socket<ServerToClient, ClientToServer>;
+    // networking-related
+    private readonly socket: Socket<ServerToClient, ClientToServer>;
 
-    // game related
-    private game: HiveGame;
+    // game-related
+    public game: HiveGame;
     private playerColor?: PieceColor;
-
-    // premoves
     private premove?: Premove;
 
     // callbacks for rendering
-    private spectate: () => void;
-    private refreshRendering: (state: GameState) => void;
+    private readonly spectate: () => void;
+    private readonly refreshRendering: () => void;
 
     constructor(
-        game: HiveGame,
         spectate: () => void,
-        refreshRendering: (state: GameState) => void
+        refreshRendering: () => void
     ) {
-        this.game = game;
+        this.game = new HiveGame();
         this.spectate = spectate;
         this.refreshRendering = refreshRendering;
 
@@ -48,6 +39,10 @@ export default class GameClient {
             auth: { sessionId: localStorage.getItem("sessionId") }
         });
         this.bindSocketEvents();
+    }
+
+    public getPlayerColor(): PieceColor | undefined {
+        return this.playerColor;
     }
 
     private bindSocketEvents() {
@@ -96,10 +91,7 @@ export default class GameClient {
                 const { piece, destination } = outcome;
                 if (outcome.turnType === "Movement") this.game.movePiece(piece, destination);
                 else this.game.placePiece(piece, destination);
-
-                // check hash & request state sync in case of mismatch
-                if (hash !== sum(this.game.getState())) this.syncState();
-                else this.refreshRendering(this.game.getState());
+                this.syncLocalGame(hash);
             }
 
             // dispatch any pending premove
@@ -158,8 +150,7 @@ export default class GameClient {
 
             if (outcome.status === "Success") {
                 this.game.processTurn(turn);
-                if (hash !== sum(this.game.getState())) this.syncState();
-                else this.refreshRendering(this.game.getState());
+                this.syncLocalGame(hash);
             }
 
             result.push(outcome);
@@ -180,47 +171,39 @@ export default class GameClient {
 
             if (outcome.status === "Success") {
                 this.game.movePiece(piece, destination);
-                if (hash !== sum(this.game.getState())) this.syncState();
-                else this.refreshRendering(this.game.getState());
+                this.syncLocalGame(hash);
             }
         });
     }
 
-    public makeMoveOrPremove(piece: Piece, destination: LatticeCoords): void {
+    /**
+     * Queue a move which will either be requested (from server) immediately, if it is this player's
+     * turn, or registered as a premove to be taken as soon as possible.
+     * 
+     * @param piece the piece to move
+     * @param destination the intended destination for the moving piece
+     */
+    public queueMove(piece: Piece, destination: LatticeCoords): void {
         if (this.playerColor === this.game.getCurrTurnColor()) {
             this.submitMoveRequest(piece, destination);
-        } else {
-            // currently out-of-turn; register premove
-            this.premove = { destination, piece };
-        }
+        } else this.premove = { destination, piece };
     }
 
     public cancelPremove(): void {
         this.premove = undefined;
     }
 
-    // NOTE thin wrapper around function of (local) HiveGame instance
-    public checkPieceForMove(piece: Piece): MoveAvailability {
-        return {
-            outcome: this.game.checkPieceForMove(piece, undefined, this.playerColor),
-            premove: this.playerColor !== this.game.getCurrTurnColor()
-        };
-    }
-
-    // NOTE thin wrapper around function of (local) HiveGame instance
-    public generateLegalMoves(piece: Piece, viaPillbug: boolean): MoveGenerator {
-        return this.game.generateLegalMoves(piece, viaPillbug, this.playerColor);
-    }
-
-    private syncState(): void {
-        console.log("Requesting state sync.");
-        this.socket.emit("game state request", state => this.loadState(state));
+    private syncLocalGame(expectedHash: string): void {
+        if (expectedHash !== sum(this.game.getState())) {
+            console.warn("Local state out-of-sync with server; retrieving serverside state");
+            this.socket.emit("game state request", state => this.loadState(state));
+        } else this.refreshRendering();
     }
 
     private loadState(state: GameState): void {
-        console.log(`Loading state with client-side hash ${sum(state)}:`);
+        console.warn(`Loading state with client-side hash ${sum(state)}`);
         this.game = HiveGame.fromState(state);
-        this.refreshRendering(this.game.getState());
-        console.log(`Loaded state has client-side hash ${sum(this.game.getState())}:`);
+        this.refreshRendering();
+        console.warn(`Loaded state has client-side hash ${sum(this.game.getState())}`);
     }
 }

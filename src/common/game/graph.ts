@@ -1,7 +1,7 @@
 import type { Adj, BFSAdj, BFSResults, EdgeTo, Filter, PathMap, Stringify } from "@/types/common/game/graph";
 
 export default class GraphUtils<V> {
-    private stringify: Stringify<V>;
+    private readonly stringify: Stringify<V>;
 
     public constructor(stringify?: Stringify<V>) {
         this.stringify = stringify || ((vertex: V) => JSON.stringify(vertex));

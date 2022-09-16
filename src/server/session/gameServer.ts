@@ -29,9 +29,9 @@ import type { GenericTurnOutcome } from "@/types/common/turn";
 import type { PieceColor } from "@/types/common/piece";
 
 export default class GameServer {
-    private activeGames: ActiveGames = {};
-    private httpServer: HTTPServer;
-    private io: Server<ClientToServer, ServerToClient, InterServer, SocketData>;
+    private readonly activeGames: ActiveGames = {};
+    private readonly httpServer: HTTPServer;
+    private readonly io: Server<ClientToServer, ServerToClient, InterServer, SocketData>;
 
     public constructor(staticAssetPath: string, port: number) {
         const app = express();

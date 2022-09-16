@@ -1,5 +1,5 @@
 .tile {
-    animation: none;
+    transition: transform 150ms ease-in-out 0s;
 
     &.selected {
         stroke: #b80fc7;

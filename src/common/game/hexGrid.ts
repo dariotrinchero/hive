@@ -16,7 +16,7 @@ export default abstract class HexGrid {
     ] as const;
 
     protected posToPiece: PosToPiece = {};
-    protected pieceToPos: PieceToPos;
+    protected readonly pieceToPos: PieceToPos;
 
     protected constructor() {
         const emptyRecord = () => Object.fromEntries(
