@@ -17,21 +17,12 @@ export interface TileDefsProps {
 const bugPaths: Record<PieceType, string> = icons;
 
 export default class TileDefs extends Component<TileDefsProps> {
-    // flags to remember the first tile (which needs to render defs)
-    private static atLeastOneTile = false;
-    private firstTile;
-
-    public constructor() {
-        super();
-        this.firstTile = !TileDefs.atLeastOneTile;
-        TileDefs.atLeastOneTile = true;
-    }
-
     /**
-     * Return path definition for hexagon of given radius, with rounded corners of given radius.
+     * Get path definition for hexagon of given radius, with rounded corners of given radius.
      *
      * @param hexRad radius of circle in which un-rounded hexagon fits snugly
      * @param cornerRad radius of circle arcs to use for rounding corners (cuts off corner)
+     * @returns path definition (attribute 'd' of SVG <path> element)
      */
     private static roundedHexPath(hexRad: number, cornerRad: number): string {
         const thirdPi: number = Math.PI / 3;
@@ -51,38 +42,28 @@ export default class TileDefs extends Component<TileDefsProps> {
         return hexPath + "Z"; // close path
     }
 
-    /**
-     * Render SVG <defs> tag containing various definitions to be referenced later by <use> tags -
-     * specifically, define the rounded hex path, placeholder, and each bug icon path. This is only
-     * rendered by the first instance of the class.
-     * 
-     * @param size hex grid dimensions
-     * @returns populated SVG defs tag
-     */
-    private static renderSVGDefs(size: HexDimensions): h.JSX.Element {
-        return (
-            <defs>
-                <path id="hex" d={TileDefs.roundedHexPath(size.radius, size.cornerRad)} />
-                <g
-                    id="placeholder"
-                    style={`stroke-width: ${0.6 * size.gap}`}
-                >
-                    {[0.95, 0.6].map((scale, index) =>
-                        <use
-                            key={index}
-                            xlinkHref="#hex"
-                            transform={`scale(${scale})`}
-                            style={index === 0 ? "stroke-dasharray: 8,4" : ""}
-                        />
-                    )}
-                </g>
-                {Object.entries(bugPaths).map(([bug, path]) => <path key={bug} id={bug} d={path} />)}
-            </defs>
-        );
-    }
-
     public override render(props: TileDefsProps): h.JSX.Element {
-        if (this.firstTile) return TileDefs.renderSVGDefs(props.size);
-        return <Fragment></Fragment>;
+        return (
+            <Fragment>
+                <defs>
+                    <path id="hex" d={TileDefs.roundedHexPath(props.size.radius, props.size.cornerRad)} />
+                    <g
+                        id="placeholder"
+                        style={`stroke-width: ${0.6 * props.size.gap}`}
+                    >
+                        {[0.95, 0.6].map((scale, index) =>
+                            <use
+                                key={index}
+                                xlinkHref="#hex"
+                                transform={`scale(${scale})`}
+                                style={index === 0 ? "stroke-dasharray: 8,4" : ""}
+                            />
+                        )}
+                    </g>
+                    {Object.entries(bugPaths).map(([bug, path]) => <path key={bug} id={bug} d={path} />)}
+                </defs>
+                {this.props.children}
+            </Fragment>
+        );
     }
 }

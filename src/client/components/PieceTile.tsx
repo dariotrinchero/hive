@@ -5,8 +5,6 @@ import "@/client/styles/PieceTile";
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { BaseTileProps } from "@/types/client/tile";
 
-import TileDefs from "@/client/components/TileDefs";
-
 export type PieceTileState = "Normal" | "Inactive" | "Selected" | "Shaking";
 export interface PieceTileProps extends BaseTileProps {
     piece: Piece;
@@ -61,7 +59,6 @@ const PieceTile: (props: PieceTileProps) => h.JSX.Element = props => {
 
     return (
         <Fragment>
-            <TileDefs {...props} />
             <g
                 class={`tile ${stateToClass[props.state]}`}
                 style={`translate: ${props.pos.join("px ")}px`}

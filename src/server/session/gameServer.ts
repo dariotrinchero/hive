@@ -221,8 +221,12 @@ export default class GameServer {
         this.io._nsps.delete(Routes.getGameRoute(gameId));
     }
 
-    public createGame(colorAssignmentRule: ColorAssignmentRule, startingColor: StartingColor): string {
-        const gameId = uuidv4();
+    public createGame(
+        colorAssignmentRule: ColorAssignmentRule,
+        startingColor: StartingColor,
+        gameId?: string
+    ): string {
+        gameId ||= uuidv4();
         if (startingColor === "Random") startingColor = Math.random() <= 0.5 ? "Black" : "White";
 
         this.activeGames[gameId] = {

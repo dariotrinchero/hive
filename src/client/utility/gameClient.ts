@@ -80,8 +80,7 @@ export default class GameClient {
 
         this.socket.on("connect_error", err => {
             // TODO display error to user
-            // TODO this is not getting run?
-            console.error(`Error connecting: ${err.message}`);
+            console.error("Error connecting", err);
         });
 
         this.socket.on("player turn", (outcome, hash) => {

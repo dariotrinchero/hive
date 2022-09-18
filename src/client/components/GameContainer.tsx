@@ -46,16 +46,18 @@ export default class GameContainer extends Component<Record<string, never>, Game
         };
     }
 
-    public override render(): h.JSX.Element {
-        const getMoves = (piece: Piece, viaPillbug: boolean) =>
-            this.client.game.generateLegalMoves(piece, viaPillbug, this.client.getPlayerColor());
+    private getMoves(piece: Piece, viaPillbug: boolean) {
+        const playerColor: PieceColor | undefined = this.client.getPlayerColor();
+        return this.client.game.generateLegalMoves(piece, viaPillbug, playerColor);
+    }
 
+    public override render(): h.JSX.Element {
         return (
             // TODO add other game-related components here
             <Board
                 interactable={!this.state.spectating}
                 piecePositions={this.state.posToPiece}
-                getMoves={getMoves}
+                getMoves={this.getMoves.bind(this)}
                 checkForMove={this.checkForMove.bind(this)}
                 doMove={this.client.queueMove.bind(this.client)}
             />

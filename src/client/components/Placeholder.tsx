@@ -4,8 +4,6 @@ import "@/client/styles/Placeholder";
 
 import type { BaseTileProps } from "@/types/client/tile";
 
-import TileDefs from "@/client/components/TileDefs";
-
 export interface PlaceholderProps extends BaseTileProps {
     viaPillbug: boolean;
     handleMouseEnter: () => void;
@@ -17,7 +15,6 @@ const mouseDown = (e: MouseEvent) =>
 const Placeholder: (props: PlaceholderProps) => h.JSX.Element = props => {
     return (
         <Fragment>
-            <TileDefs {...props} />
             <use
                 class={`placeholder ${props.viaPillbug ? "pillbug" : ""}`}
                 xlinkHref="#placeholder"
