@@ -1,4 +1,4 @@
-import { Component, h } from "preact";
+import { Component, Fragment, h } from "preact";
 
 import HiveGame from "@/common/game/game";
 import GameClient from "@/client/utility/gameClient";
@@ -52,15 +52,20 @@ export default class GameContainer extends Component<Record<string, never>, Game
     }
 
     public override render(): h.JSX.Element {
+        const playerColor: PieceColor | undefined = this.client.getPlayerColor();
         return (
             // TODO add other game-related components here
-            <Board
-                interactable={!this.state.spectating}
-                piecePositions={this.state.posToPiece}
-                getMoves={this.getMoves.bind(this)}
-                checkForMove={this.checkForMove.bind(this)}
-                doMove={this.client.queueMove.bind(this.client)}
-            />
+            <Fragment>
+                <h1>{playerColor}</h1>
+                <span>{playerColor === this.client.game.getCurrTurnColor() ? "Your turn" : <span>&nbsp;</span>}</span>
+                <Board
+                    interactable={!this.state.spectating}
+                    piecePositions={this.state.posToPiece}
+                    getMoves={this.getMoves.bind(this)}
+                    checkForMove={this.checkForMove.bind(this)}
+                    doMove={this.client.queueMove.bind(this.client)}
+                />
+            </Fragment>
         );
     }
 }

@@ -179,6 +179,7 @@ export default class Board extends Component<BoardProps, BoardState> {
                 from: [NaN, NaN],
                 pathMap: () => [],
                 placeholders: {},
+                tileShake: [NaN, NaN],
                 to: [NaN, NaN]
             }
         }));
@@ -300,7 +301,7 @@ export default class Board extends Component<BoardProps, BoardState> {
                 }));
             } else {
                 this.shakeTile(pos);
-                console.error(`No legal moves: ${outcome}`);
+                console.error(`No legal moves. Piece may move: ${outcome}`);
             }
         } else if (HexGrid.eqPos(pos, from)) this.clearSelection();
     };

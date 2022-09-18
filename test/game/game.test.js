@@ -195,7 +195,7 @@ describe("When piece is moved", () => {
         expectSuccess("bB1 bQ");
     });
 
-    it("rejects if out-of-turn", () => {
+    it("rejects if out-of-turn without adjacent pillbug", () => {
         processTurns(
             "bQ .",
             "wQ -bQ",
@@ -203,7 +203,7 @@ describe("When piece is moved", () => {
             "wA -wQ"
         );
         expectSuccess("bA1 wQ\\");
-        expectError("bQ bA1-", "ErrOutOfTurn");
+        expectError("bQ bA1-", "ErrNoPillbugTouching");
     });
 
     it("rejects if queen is unplayed", () => {
@@ -287,6 +287,7 @@ describe("When piece is moved", () => {
     // TODO add more specific bug movement checks
     // TODO add pillbug immobilization checks; test that it only applies on the very next turn, even if pillbug-user subsequently
     // places or passes instead of moving
+    // TODO test for other PillbugMovementErrorMsg outcomes
     // TODO test how pillbug interacts with unplayed queen
     // TODO can mosquito steal movement of beetle from adjacent mounted mosquito?
     // TODO test that special moves of adjacent pillbug + mosquito combine

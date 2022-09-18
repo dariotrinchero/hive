@@ -149,17 +149,20 @@ export default class GraphUtils<V> {
         marked[this.stringify(source)] = true;
         const stack: V[] = adj(source);
 
-        const sourceAdj = stack.length;
+        let sourceAdj: number = stack.length;
         let sourceDFSChildren = 0;
 
         // process items on stack
         while (stack.length > 0) {
             const v: V = stack.pop() as V;
-            const vStr = this.stringify(v);
+            const vStr: string = this.stringify(v);
             if (marked[vStr]) continue;
 
             // count children of source in DFS tree
-            if (stack.length < sourceAdj) sourceDFSChildren++;
+            if (stack.length < sourceAdj) {
+                sourceDFSChildren++;
+                sourceAdj--;
+            }
 
             // mark vertex & push all adjacencies
             marked[vStr] = true;

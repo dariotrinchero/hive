@@ -22,7 +22,7 @@ Since the game state is distributed, we need additional code to maintiain parity
 
 Shared Typescript type & interface definitions are in ```src/types```, the structure of which mostly mimics that of ```src```. Finally, unit tests are in ```test```.
 
-## Compiling & running
+## Compiling & running for development
 
 First, install dependencies with
 ```bash
@@ -30,13 +30,15 @@ First, install dependencies with
 ```
 Now to compile & bundle both the client and server code, run
 ```bash
-    npm run watch
+    npm start
 ```
-which will recompile whenever the source files change. Finally, to launch the Express server and serve the bundled client code on a local port, run
+which will recompile whenever the source files change, and should automatically launch a game. Finally, to launch the Express server, which manages the websocket connections, run
 ```bash
-    npm run serve
+    npm run serve-dev
 ```
-which will print a URL at which the client webpage can be retreived.
+which will re-launch the server whenever the compiled server code changes.
+
+To actually play the game, you will need to open the game URL in two different browser sessions (which will act as the 2 players). I recommend just copying the URL into a private browsing window.
 
 ## Running unit tests
 

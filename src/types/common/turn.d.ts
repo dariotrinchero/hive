@@ -24,7 +24,13 @@ export type PlacementErrorMsg = CommonErrorMsg
     | "ErrTouchesOppColor"
     | "ErrOutOfPieces";
 
+export type PillbugMovementErrorMsg = "ErrNoPillbugTouching"
+    | "ErrPillbugMovedLastTurn"
+    | "ErrPillbugCannotTargetStack"
+    | "ErrGateBlocksPillbugMount";
+
 export type MovementErrorMsg = CommonErrorMsg
+    | PillbugMovementErrorMsg
     | `ErrViolates${PieceType}Movement`
     | "ErrQueenUnplayed"
     | "ErrCovered"

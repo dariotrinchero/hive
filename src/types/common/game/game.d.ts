@@ -1,5 +1,5 @@
 import type { Inventory, PieceColor } from "@/types/common/piece";
-import type { MovementErrorMsg, PlacementErrorMsg } from "@/types/common/turn";
+import type { MovementErrorMsg, PillbugMovementErrorMsg, PlacementErrorMsg } from "@/types/common/turn";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
 import type { PathMap } from "@/types/common/game/graph";
 
@@ -14,6 +14,20 @@ export type GameStatus = "Ongoing" | "BlackWin" | "WhiteWin" | "Draw";
 // turn check outcomes
 export type PlacementCheckOutcome = "Success" | PlacementErrorMsg;
 export type MovementCheckOutcome = "Success" | "OnlyByPillbug" | MovementErrorMsg;
+export type PillbugMovementCheckOutcome = "Success" | PillbugMovementErrorMsg;
 
 // move generator
 export type MoveGenerator = Generator<LatticeCoords, PathMap<LatticeCoords>, undefined>;
+
+// adjacent pillbug check outcome
+interface AdjPillbugBase {
+    status: PillbugMovementCheckOutcome;
+}
+interface AdjPillbugError extends AdjPillbugBase {
+    status: PillbugMovementErrorMsg;
+}
+interface AdjPillbugSuccess extends AdjPillbugBase {
+    status: "Success";
+    validPillbugs: LatticeCoords[];
+}
+export type AdjPillbugs = AdjPillbugError | AdjPillbugSuccess;

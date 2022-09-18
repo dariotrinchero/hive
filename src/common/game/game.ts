@@ -14,6 +14,7 @@ import type {
 import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
 import type { GameState } from "@/types/common/socket";
 import type {
+    AdjPillbugs,
     GameStatus,
     LastMoveDestination,
     MoveGenerator,
@@ -269,6 +270,48 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
+     * Get adjacent positions of pillbugs which are currently capable of being mounted by given piece.
+     * 
+     * @param piece piece which is to be moved by pillbug
+     * @param fromPos initial position of piece, adjacent to which we seek pillbugs
+     * @param colorToMove the current color to move
+     * @returns discriminated union indicating success or error; success case includes valid pillbug positions
+     */
+    private adjPillbugMounts(piece: Piece, fromPos: LatticeCoords, colorToMove: PieceColor): AdjPillbugs {
+        // may not affect stacked pieces
+        if (piece.covering) return { status: "ErrPillbugCannotTargetStack" };
+
+        // find adjacent pillbugs / mosquitoes (which are touching pillbugs) of current colour
+        const pillbugPositions = this.adjPieceCoords(fromPos).filter(adjPos => {
+            // if (this.isImmobile(adjPos)) return false;
+
+            const adjPiece = this.getPieceAt(adjPos);
+            if (adjPiece?.color !== colorToMove) return false;
+
+            return adjPiece.type === "Pillbug"
+                || adjPiece.type === "Mosquito"
+                && this.adjPieces(adjPos).some(p => p.type === "Pillbug");
+        });
+        if (!pillbugPositions.length) return { status: "ErrNoPillbugTouching" };
+
+        // disregard immobile pillbugs (which moved last turn)
+        const mobilePillbugs = pillbugPositions.filter(pos => !this.isImmobile(pos));
+        if (!mobilePillbugs.length) return { status: "ErrPillbugMovedLastTurn" };
+
+        // freedom-to-move rule must not block piece from mounting pillbug
+        const mountable = (pillbugPos: LatticeCoords) =>
+            this.adjMounts(fromPos as LatticeCoords, fromPos, false)
+                .some(p => HiveGame.eqPos(p, pillbugPos));
+        const mountablePillbugs = pillbugPositions.filter(mountable);
+        if (!mountablePillbugs.length) return { status: "ErrGateBlocksPillbugMount" };
+
+        return {
+            status: "Success",
+            validPillbugs: mountablePillbugs
+        };
+    }
+
+    /**
      * Check that moving given piece from given (old) location obeys the one-hive rule.
      * 
      * @param piece piece to move
@@ -292,7 +335,7 @@ export default class HiveGame extends HexGrid {
         if (!lastSeenSpace && this.getPieceAt(adjacent[0])) groupsSeen--; // if we began in connected group
         if (groupsSeen === 1) return true;
 
-        // reject if removing piece from original location disconnects 
+        // reject if removing piece from original location disconnects
         return !HiveGame.graphUtils.isArticulationPoint(fromPos, (pos) => this.adjPieceCoords(pos));
     }
 
@@ -326,8 +369,10 @@ export default class HiveGame extends HexGrid {
         // externalized checks
         if (this.isImmobile(fromPos)) return "ErrPieceMovedLastTurn";
         if (!this.checkOneHive(piece, fromPos)) return "ErrOneHiveRule";
+        const { status } = this.adjPillbugMounts(piece, fromPos, colorToMove);
 
-        return colorToMove === piece.color ? "Success" : "OnlyByPillbug";
+        if (colorToMove === piece.color) return "Success";
+        return status === "Success" ? "OnlyByPillbug" : status;
     }
 
     /**
@@ -436,35 +481,18 @@ export default class HiveGame extends HexGrid {
         fromPos = fromPos || this.getPosOf(piece);
         if (!fromPos) return () => [];
 
-        // may not affect stacked pieces
-        if (piece.covering) return () => [];
-
-        // find adjacent non-immobilized pillbug / mosquito of current colour
-        const pillbugPositions = this.adjPieceCoords(fromPos).filter(adjPos => {
-            if (this.isImmobile(adjPos)) return false;
-
-            const adjPiece = this.getPieceAt(adjPos);
-            if (adjPiece?.color !== colorToMove) return false;
-
-            return adjPiece.type === "Pillbug"
-                || adjPiece.type === "Mosquito"
-                && this.adjPieces(adjPos).some(p => p.type === "Pillbug");
-        });
-
-        // freedom-to-move rule must not block piece from mounting pillbug
-        const mountable = (pillbugPos: LatticeCoords) =>
-            this.adjMounts(fromPos as LatticeCoords, fromPos, false)
-                .some(p => HiveGame.eqPos(p, pillbugPos));
-        const mountablePillbugs = pillbugPositions.filter(mountable);
+        const adjPillbugs = this.adjPillbugMounts(piece, fromPos, colorToMove);
+        if (adjPillbugs.status !== "Success") return () => [];
 
         // yield dismount points from all mountable pillbugs & return path map
-        const destinations: LatticeCoords[][] = mountablePillbugs.map(pillbugPos =>
+        const { validPillbugs } = adjPillbugs;
+        const destinations: LatticeCoords[][] = validPillbugs.map(pillbugPos =>
             this.adjMounts(pillbugPos, fromPos, true));
         yield* destinations.flat();
         return (vertex: LatticeCoords) => {
             const index = destinations.findIndex(list => list.some(pos => HiveGame.eqPos(pos, vertex)));
             if (index < 0) return [];
-            return [mountablePillbugs[index], fromPos as LatticeCoords];
+            return [validPillbugs[index], fromPos as LatticeCoords];
         };
     }
 
