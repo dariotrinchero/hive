@@ -56,11 +56,12 @@ export default class GameContainer extends Component<Record<string, never>, Game
         return (
             // TODO add other game-related components here
             <Fragment>
-                <h1>{playerColor}</h1>
+                <h1>{playerColor || "...waiting for opponent"}</h1>
                 <span>{playerColor === this.client.game.getCurrTurnColor() ? "Your turn" : <span>&nbsp;</span>}</span>
                 <Board
                     interactable={!this.state.spectating}
                     piecePositions={this.state.posToPiece}
+                    currTurnColor={this.state.currTurnColor}
                     getMoves={this.getMoves.bind(this)}
                     checkForMove={this.checkForMove.bind(this)}
                     doMove={this.client.queueMove.bind(this.client)}

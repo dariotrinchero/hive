@@ -5,7 +5,7 @@ import "@/client/styles/Board";
 import type { LatticeCoords, PosToPiece } from "@/types/common/game/hexGrid";
 import type { MoveGenerator } from "@/types/common/game/game";
 import type { PathMap } from "@/types/common/game/graph";
-import type { Piece } from "@/types/common/piece";
+import type { Piece, PieceColor } from "@/types/common/piece";
 
 import GraphUtils from "@/common/game/graph";
 import HexGrid from "@/common/game/hexGrid";
@@ -23,6 +23,7 @@ export type ScreenCoords = [number, number];
 export interface BoardProps {
     // board layout
     piecePositions: PosToPiece;
+    currTurnColor: PieceColor;
 
     // interactivity
     interactable: boolean;
@@ -36,7 +37,7 @@ interface BoardState {
         height: number;
         width: number;
     };
-    movePreview: { // selecting piece & previewing move
+    moveSelect: { // selecting piece & previewing move
         from: LatticeCoords;
         to: LatticeCoords;
         viaPillbug: boolean;
@@ -71,12 +72,21 @@ export default class Board extends Component<BoardProps, BoardState> {
 
     public constructor() {
         super();
-        this.state = {
+        this.state = Board.initialState();
+
+        // calculate tile spacings
+        const radPlusGap = hexDimensions.radius + hexDimensions.gap;
+        this.horSpacing = Math.sqrt(3) * radPlusGap;
+        this.vertSpacing = 1.5 * radPlusGap;
+    }
+
+    private static initialState(): BoardState {
+        return {
             dimensions: {
                 height: 666,
                 width: 1920
             },
-            movePreview: {
+            moveSelect: {
                 from: [NaN, NaN],
                 pathMap: () => [],
                 placeholders: {},
@@ -90,11 +100,6 @@ export default class Board extends Component<BoardProps, BoardState> {
                 zoom: 1
             }
         };
-
-        // calculate tile spacings
-        const radPlusGap = hexDimensions.radius + hexDimensions.gap;
-        this.horSpacing = Math.sqrt(3) * radPlusGap;
-        this.vertSpacing = 1.5 * radPlusGap;
     }
 
     /**
@@ -108,9 +113,15 @@ export default class Board extends Component<BoardProps, BoardState> {
         }
     }
 
-    public override componentWillUpdate(nextProps: Readonly<BoardProps>): void {
-        // TODO remove placeholders whenever the board changes from the outside
-        // TODO this inefficient to test every time
+    /**
+     * Detect when the turn has advanced & clear the selection.
+     * 
+     * @param previousProps previous component properties, including turn color
+     */
+    public override componentDidUpdate(previousProps: Readonly<BoardProps>): void {
+        if (previousProps.currTurnColor !== this.props.currTurnColor) {
+            this.clearSelection();
+        }
     }
 
     /**
@@ -155,10 +166,10 @@ export default class Board extends Component<BoardProps, BoardState> {
         const newPathMap: PathMap<LatticeCoords> = next.value;
 
         this.setState((state: BoardState) => {
-            const { pathMap, placeholders } = state.movePreview;
+            const { pathMap, placeholders } = state.moveSelect;
             return {
-                movePreview: {
-                    ...state.movePreview,
+                moveSelect: {
+                    ...state.moveSelect,
                     pathMap: GraphUtils.mergePathMaps(pathMap, newPathMap),
                     // older (non-pillbug) placeholders take preference here:
                     placeholders: { ...newPlaceholders, ...placeholders }
@@ -170,19 +181,10 @@ export default class Board extends Component<BoardProps, BoardState> {
     }
 
     /**
-     * Reset selection, delete all placeholders, reset movement paths, and clear selection outline.
+     * Reset selection & movement path, and clear all placeholders.
      */
     private clearSelection(): void {
-        this.setState((state: BoardState) => ({
-            movePreview: {
-                ...state.movePreview,
-                from: [NaN, NaN],
-                pathMap: () => [],
-                placeholders: {},
-                tileShake: [NaN, NaN],
-                to: [NaN, NaN]
-            }
-        }));
+        this.setState({ moveSelect: Board.initialState().moveSelect });
     }
 
     /**
@@ -221,30 +223,32 @@ export default class Board extends Component<BoardProps, BoardState> {
         ], nextZoom);
     }
 
+    /**
+     * Update state to trigger addition of a class to specified piece tile which in
+     * turn causes it to shake. This is used to indicate an invalid tile selection.
+     * 
+     * @param pos position of tile to apply shake animation to
+     */
     private shakeTile(pos: LatticeCoords): void {
         this.setState(
             (state: BoardState) => ({
-                movePreview: { ...state.movePreview, tileShake: [NaN, NaN] }
+                moveSelect: { ...state.moveSelect, tileShake: [NaN, NaN] }
             }),
             () => this.setState(
                 (state: BoardState) => ({
-                    movePreview: { ...state.movePreview, tileShake: pos }
+                    moveSelect: { ...state.moveSelect, tileShake: pos }
                 }),
             )
         );
     }
 
     private handlePlaceholderClick = (pos: LatticeCoords) => {
-        const { from } = this.state.movePreview;
+        const { from } = this.state.moveSelect;
         if (from) {
             const piece = this.props.piecePositions[from.join(",")];
             if (piece) this.props.doMove(piece, pos);
             else {
-                // TODO this should never be reachable, but currently is, when:
-                // 1. p1 clicks their piece next to p2's pillbug for premove
-                // 2. p2 uses their move to move p1's piece (invalidating 'from' on p1's side)
-                // 3. p1 clicks the (now-redundant) placeholder
-                // Show error to user (and patch the above specific case)
+                // TODO should never be reachable; still, show error to user
                 console.error("Piece to move is no longer in its expected starting location.");
             }
             this.clearSelection();
@@ -252,7 +256,7 @@ export default class Board extends Component<BoardProps, BoardState> {
     };
     private handlePlaceholderHover = (pos: LatticeCoords, viaPillbug: boolean) => {
         this.setState((state: BoardState) => ({
-            movePreview: { ...state.movePreview, to: pos, viaPillbug }
+            moveSelect: { ...state.moveSelect, to: pos, viaPillbug }
         }));
     };
 
@@ -264,11 +268,11 @@ export default class Board extends Component<BoardProps, BoardState> {
     private renderPlaceholders(): h.JSX.Element {
         return (
             <Fragment>{
-                Object.entries(this.state.movePreview.placeholders).map(([posStr, viaPillbug]) => {
+                Object.entries(this.state.moveSelect.placeholders).map(([posStr, viaPillbug]) => {
                     const pos = posStr.split(",").map(str => parseInt(str)) as LatticeCoords;
                     return (
                         <Placeholder
-                            key={`${posStr}${viaPillbug ? "pillbug" : ""}`} // TODO sensible key?
+                            key={`${posStr}${viaPillbug ? "pillbug" : ""}`}
                             size={hexDimensions}
                             pos={this.convertCoordinates(...pos)}
                             handleClick={this.handlePlaceholderClick.bind(this, pos)}
@@ -282,7 +286,7 @@ export default class Board extends Component<BoardProps, BoardState> {
     }
 
     private handlePieceTileClick = (piece: Piece, pos: LatticeCoords) => {
-        const { from } = this.state.movePreview;
+        const { from } = this.state.moveSelect;
         if (isNaN(from[0])) {
             // process legal moves if any exist
             const { outcome } = this.props.checkForMove(piece); // TODO does not distinguish premoves
@@ -297,7 +301,7 @@ export default class Board extends Component<BoardProps, BoardState> {
             // select tile if it has legal moves
             if (hasLegalMoves) {
                 this.setState((state: BoardState) => ({
-                    movePreview: { ...state.movePreview, from: pos }
+                    moveSelect: { ...state.moveSelect, from: pos }
                 }));
             } else {
                 this.shakeTile(pos);
@@ -314,7 +318,7 @@ export default class Board extends Component<BoardProps, BoardState> {
      */
     private renderPieceTiles(props: BoardProps): h.JSX.Element {
         // TODO PosToPiece only records topmost piece in stack; we should render the others
-        const { from, tileShake } = this.state.movePreview;
+        const { from, tileShake } = this.state.moveSelect;
         return (
             <Fragment>{
                 Object.entries(props.piecePositions).map(([posStr, piece]) => {
@@ -328,14 +332,13 @@ export default class Board extends Component<BoardProps, BoardState> {
                         else if (isNaN(from[0])) state = "Normal";
                     }
 
-                    // key must change when state changes to/from "Shaking" to force PieceTile
-                    // to be remounted, which is necessary to restart CSS animations
-                    // (see https://css-tricks.com/restart-css-animation/)
+                    // key changes for shaking tiles to force remount (needed to restart CSS animations)
+                    // see: https://css-tricks.com/restart-css-animation/
                     const key = `${Notation.pieceToString(piece)}${state === "Shaking" ? "~" : ""}`;
 
                     return (
                         <PieceTile
-                            // TODO without a key, all pieces transition at once, but with it nothing transitions
+                            // TODO without key, all pieces transition at once, but with one nothing transitions
                             key={key}
                             size={hexDimensions}
                             piece={piece}
@@ -366,7 +369,7 @@ export default class Board extends Component<BoardProps, BoardState> {
 
     public override render(props: BoardProps): h.JSX.Element {
         const { pan, zoom } = this.state.transform;
-        const { to, pathMap, viaPillbug } = this.state.movePreview;
+        const { to, pathMap, viaPillbug } = this.state.moveSelect;
         const movePath = "M" + [to].concat(pathMap(to))
             .map(p => this.convertCoordinates(...p).join(",")).join("L");
 
