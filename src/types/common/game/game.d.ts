@@ -9,7 +9,7 @@ export type LastMoveDestination = Record<PieceColor, LatticeCoords | null>;
 // trackers inferable from game state
 export type PlayerInventories = Record<PieceColor, Inventory>;
 export type PlacementCount = Record<PieceColor, number>;
-export type GameStatus = "Ongoing" | "BlackWin" | "WhiteWin" | "Draw";
+export type GameStatus = "Ongoing" | `${PieceColor}Win` | "Draw";
 
 // turn check outcomes
 export type PlacementCheckOutcome = "Success" | PlacementErrorMsg;

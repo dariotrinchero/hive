@@ -1,9 +1,9 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { h, render } from "preact";
 
-import GameContainer from "@/client/components/GameContainer";
+import GameUI from "@/client/components/GameUI";
 
 render(
-    <GameContainer />,
+    <GameUI />,
     document.body
 );

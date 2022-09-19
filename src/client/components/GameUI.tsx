@@ -8,6 +8,7 @@ import type { MovementCheckOutcome } from "@/types/common/game/game";
 import type { GameState } from "@/types/common/socket";
 
 import Board from "@/client/components/Board";
+import Spinner from "./Spinner";
 
 export interface MoveAvailability {
     outcome: MovementCheckOutcome;
@@ -16,11 +17,11 @@ export interface MoveAvailability {
 
 // TODO maybe it is wasteful to duplicate this data here and in the HiveGame object, but
 // maybe it is sensible for having clean separation of rendering & game logic?
-interface GameContainerState extends GameState {
+interface GameUIState extends GameState {
     spectating: boolean;
 }
 
-export default class GameContainer extends Component<Record<string, never>, GameContainerState> {
+export default class GameUI extends Component<Record<string, never>, GameUIState> {
     private readonly client: GameClient;
 
     public constructor() {
@@ -52,20 +53,25 @@ export default class GameContainer extends Component<Record<string, never>, Game
     }
 
     public override render(): h.JSX.Element {
+        // TODO this is an unreliable method of checking for game having begun:
+        // player color is set as soon as client connects, only Preact has not re-rendered by then;
+        // improve this by having game / gameClient be aware of whether game is "pending"
         const playerColor: PieceColor | undefined = this.client.getPlayerColor();
         return (
             // TODO add other game-related components here
             <Fragment>
                 <h1>{playerColor || "...waiting for opponent"}</h1>
                 <span>{playerColor === this.client.game.getCurrTurnColor() ? "Your turn" : <span>&nbsp;</span>}</span>
-                <Board
-                    interactable={!this.state.spectating}
-                    piecePositions={this.state.posToPiece}
-                    currTurnColor={this.state.currTurnColor}
-                    getMoves={this.getMoves.bind(this)}
-                    checkForMove={this.checkForMove.bind(this)}
-                    doMove={this.client.queueMove.bind(this.client)}
-                />
+                {playerColor
+                    ? <Board
+                        interactable={!this.state.spectating}
+                        piecePositions={this.state.posToPiece}
+                        currTurnColor={this.state.currTurnColor}
+                        getMoves={this.getMoves.bind(this)}
+                        checkForMove={this.checkForMove.bind(this)}
+                        doMove={this.client.queueMove.bind(this.client)}
+                    />
+                    : <Spinner />}
             </Fragment>
         );
     }

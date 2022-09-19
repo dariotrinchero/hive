@@ -1,0 +1,32 @@
+$duration: 0.6s;
+
+.spinner {
+    animation: rotategroup $duration * 6 step-start 0s infinite normal forwards;
+
+    use {
+        fill: #363430ee;
+    }
+
+    .rolling {
+        animation: hexroll $duration cubic-bezier(0.6, 0, 1.0, 1.0) 0s infinite normal forwards;
+    }
+}
+
+@keyframes hexroll {
+
+    from {
+        rotate: 0deg;
+    }
+
+    to {
+        rotate: 120deg;
+    }
+}
+
+@keyframes rotategroup {
+    @for $i from 0 through 5 {
+        #{$i * calc(100 / 6) + "%"} {
+            rotate: 60deg * $i;
+        }
+    }
+}

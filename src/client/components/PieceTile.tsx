@@ -9,6 +9,7 @@ export type PieceTileState = "Normal" | "Inactive" | "Selected" | "Shaking";
 export interface PieceTileProps extends BaseTileProps {
     piece: Piece;
     state: PieceTileState;
+    strokeWidth: number; // for highlighted tiles
 }
 
 const stateToClass: Record<PieceTileState, string> = {
@@ -35,7 +36,7 @@ const tileColors: Record<PieceColor, string> = {
 };
 
 const bugTransforms: Record<PieceType, {
-    scale: number; // best-looking relative scaling (actual scale = this * hexRad / 100)
+    scale: number; // best-looking relative scaling
     offset: [number, number]; // offest to center unscaled bug
 }> = {
     Ant: { offset: [-60.02500, -62.88333], scale: 1.03351 },
@@ -67,12 +68,11 @@ const PieceTile: (props: PieceTileProps) => h.JSX.Element = props => {
                 <use
                     xlinkHref="#hex"
                     fill={tileColors[color]}
-                    style={`stroke-width: ${props.size.gap * Math.sqrt(3)}`}
+                    style={`stroke-width: ${props.strokeWidth}`}
                 />
                 <use
                     xlinkHref={`#${type}`}
-                    transform={`scale(${scale * props.size.radius / 100})`
-                        + `translate(${offset[0]},${offset[1]})`}
+                    transform={`scale(${scale})translate(${offset[0]},${offset[1]})`}
                     fill={bugColors[type]}
                     stroke={bugColors[type]}
                     style={`stroke-width: ${type === "Pillbug" ? 1 : 0}`}
