@@ -23,11 +23,13 @@ import type {
     PlacementCount,
     PlayerInventories
 } from "@/types/common/game/game";
-import type { BFSAdj, Filter, PathMap } from "@/types/common/game/graph";
+import type { BFSAdj, Filter, IsCutVertex, PathMap } from "@/types/common/game/graph";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
 
 export default class HiveGame extends HexGrid {
+    // graph algorithms
     private static graphUtils = new GraphUtils<LatticeCoords>(pos => pos.join(","));
+    private isCutVertex?: IsCutVertex<LatticeCoords>;
 
     // game state
     private turnCount: number;
@@ -118,12 +120,14 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
-     * Advance current turn, checking for game-ending conditions & recording last move.
+     * Advance current turn, check for game-ending conditions & record last move; also invalidate 
+     * precomputed cut vertices (used to check one-hive rule).
      * 
      * @param moveDest destination of movement in last turn, if any
      */
     private advanceTurn(moveDest?: LatticeCoords): void {
         this.turnCount++;
+        this.isCutVertex = undefined;
         this.movedLastTurn[this.currTurnColor] = moveDest || null;
         this.currTurnColor = this.getNextTurnColor();
         this.gameStatus = this.checkGameStatus();
@@ -278,9 +282,6 @@ export default class HiveGame extends HexGrid {
      * @returns discriminated union indicating success or error; success case includes valid pillbug positions
      */
     private adjPillbugMounts(piece: Piece, fromPos: LatticeCoords, colorToMove: PieceColor): AdjPillbugs {
-        // may not affect stacked pieces
-        if (piece.covering) return { status: "ErrPillbugCannotTargetStack" };
-
         // find adjacent pillbugs / mosquitoes (which are touching pillbugs) of current colour
         const pillbugPositions = this.adjPieceCoords(fromPos).filter(adjPos => {
             // if (this.isImmobile(adjPos)) return false;
@@ -297,6 +298,9 @@ export default class HiveGame extends HexGrid {
         // disregard immobile pillbugs (which moved last turn)
         const mobilePillbugs = pillbugPositions.filter(pos => !this.isImmobile(pos));
         if (!mobilePillbugs.length) return { status: "ErrPillbugMovedLastTurn" };
+
+        // may not affect stacked pieces
+        if (piece.covering) return { status: "ErrPillbugCannotTargetStack" };
 
         // freedom-to-move rule must not block piece from mounting pillbug
         const mountable = (pillbugPos: LatticeCoords) =>
@@ -322,21 +326,24 @@ export default class HiveGame extends HexGrid {
         // accept if piece is stacked
         if (piece.covering) return true;
 
-        // accept if all adjacent pieces already connect with each other
-        let lastSeenSpace = true;
-        let groupsSeen = 0;
-        const adjacent: LatticeCoords[] = this.adjCoords(fromPos);
-        adjacent.forEach(pos => {
-            if (this.getPieceAt(pos)) {
-                if (lastSeenSpace) groupsSeen++;
-                lastSeenSpace = false;
-            } else lastSeenSpace = true;
-        });
-        if (!lastSeenSpace && this.getPieceAt(adjacent[0])) groupsSeen--; // if we began in connected group
-        if (groupsSeen === 1) return true;
+        if (!this.isCutVertex) {
+            // shortcut to accept if all adjacent pieces already mutually connect
+            let lastSeenSpace = true;
+            let groupsSeen = 0;
+            const adjacent: LatticeCoords[] = this.adjCoords(fromPos);
+            adjacent.forEach(pos => {
+                if (this.getPieceAt(pos)) {
+                    if (lastSeenSpace) groupsSeen++;
+                    lastSeenSpace = false;
+                } else lastSeenSpace = true;
+            });
+            if (!lastSeenSpace && this.getPieceAt(adjacent[0])) groupsSeen--; // if we began in connected group
+            if (groupsSeen === 1) return true;
 
-        // reject if removing piece from original location disconnects
-        return !HiveGame.graphUtils.isArticulationPoint(fromPos, (pos) => this.adjPieceCoords(pos));
+            // otherwise recompute all cut vertices
+            this.isCutVertex = HiveGame.graphUtils.getCutVertices(fromPos, pos => this.adjPieceCoords(pos));
+        }
+        return !this.isCutVertex(fromPos);
     }
 
     /**
@@ -412,7 +419,7 @@ export default class HiveGame extends HexGrid {
             // merge straight-line moves in each of 3 directions
             generator = GraphUtils.mergeGenerators(
                 ...[0, 1, 2].map(i =>
-                    HiveGame.graphUtils.generatePaths(
+                    HiveGame.graphUtils.generateShortestPaths(
                         fromPos as LatticeCoords,
                         (pos) => {
                             if (!this.getPieceAt(pos)) return [];
@@ -438,7 +445,7 @@ export default class HiveGame extends HexGrid {
             // all other movement can be calculated in single call to generatePaths()
             let maxDist: number | undefined;
             let isEndpoint: Filter<LatticeCoords> | undefined;
-            let adjFunc: BFSAdj<LatticeCoords> = (pos) => this.adjSlideSpaces(pos, fromPos);
+            let adjFunc: BFSAdj<LatticeCoords> = pos => this.adjSlideSpaces(pos, fromPos);
 
             if (type === "QueenBee" || type === "Pillbug") {
                 maxDist = 1;
@@ -451,7 +458,7 @@ export default class HiveGame extends HexGrid {
                 maxDist = 1;
             }
 
-            generator = HiveGame.graphUtils.generatePaths(fromPos, adjFunc, maxDist, isEndpoint);
+            generator = HiveGame.graphUtils.generateShortestPaths(fromPos, adjFunc, maxDist, isEndpoint);
         }
 
         // yield moves & return path information

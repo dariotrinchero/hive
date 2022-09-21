@@ -8,7 +8,7 @@ const forceMove = (notation) => {
     return game.movePiece(turn.piece, game.relToAbs(turn.destination));
 };
 
-function processTurns() {
+function processTurns() { // ordinary function so 'arguments' is defined
     let result;
     for (const notation of arguments) {
         result = game.processTurn(Notation.stringToTurnRequest(notation));
