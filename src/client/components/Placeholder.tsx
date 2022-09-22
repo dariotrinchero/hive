@@ -3,9 +3,10 @@ import { Fragment, h } from "preact";
 import "@/client/styles/Placeholder";
 
 import type { BaseTileProps } from "@/types/client/tile";
+import type { MovementType } from "@/types/common/game/outcomes";
 
 export interface PlaceholderProps extends BaseTileProps {
-    viaPillbug: boolean;
+    movementType: MovementType;
     handleMouseEnter: () => void;
 }
 
@@ -16,7 +17,7 @@ const Placeholder: (props: PlaceholderProps) => h.JSX.Element = props => {
     return (
         <Fragment>
             <use
-                class={`placeholder ${props.viaPillbug ? "pillbug" : ""}`}
+                class={`placeholder ${props.movementType === "Pillbug" ? "pillbug" : ""}`}
                 xlinkHref="#placeholder"
                 transform={`translate(${props.pos.join(",")})`}
                 onMouseDown={mouseDown}

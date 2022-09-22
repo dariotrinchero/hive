@@ -4,18 +4,20 @@ import { Namespace, Server } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
 
 import sum from "@/common/objectHash";
-import { invertColor } from "@/common/piece";
+import { invertColor } from "@/common/game/piece";
 import HiveGame from "@/common/game/game";
 import Routes from "@/server/session/routes";
 
+import type { TurnResult } from "@/types/common/game/outcomes";
+import type { PieceColor } from "@/types/common/game/piece";
 import type {
     ClientToServer,
-    EventErrorBase,
     InterServer,
-    MovementEventOutcome,
+    MovementRequestOutcome,
     ServerToClient,
     SocketData,
-    TurnEventOutcome
+    TurnRequestErrorBase,
+    TurnRequestOutcome
 } from "@/types/common/socket";
 import type {
     ActiveGames,
@@ -25,8 +27,6 @@ import type {
     IOSocket,
     StartingColor
 } from "@/types/server/gameServer";
-import type { GenericTurnOutcome } from "@/types/common/turn";
-import type { PieceColor } from "@/types/common/piece";
 
 export default class GameServer {
     private readonly activeGames: ActiveGames = {};
@@ -105,7 +105,12 @@ export default class GameServer {
         // send new client their session details
         const common = { sessionId, startingColor: gameDetails.startingColor };
         if (clientType === "Spectator") socket.emit("session", { ...common, spectating: true });
-        else socket.emit("session", { ...common, color: clientDetails.color, spectating: false });
+        else socket.emit("session", {
+            ...common,
+            color: clientDetails.color,
+            noFirstQueen: gameDetails.noFirstQueen,
+            spectating: false
+        });
 
         // join game room & notify any other members
         console.log(`${clientType} ${sessionId} connected`);
@@ -120,7 +125,7 @@ export default class GameServer {
         }
     }
 
-    private checkClientForTurn<T extends EventErrorBase>(
+    private checkClientForTurn<T extends TurnRequestErrorBase>(
         clientDetails: ClientDetails,
         errTemplate: T,
         oldHash: string,
@@ -148,7 +153,7 @@ export default class GameServer {
         return false;
     }
 
-    private handleTurnOutcome<T extends GenericTurnOutcome>(
+    private handleTurnOutcome<T extends TurnResult>(
         clientDetails: ClientDetails,
         outcome: T,
         callback: (out: T, hash: string) => void
@@ -175,7 +180,7 @@ export default class GameServer {
         });
 
         socket.on("turn request", (req, callback) => {
-            const err: TurnEventOutcome = {
+            const err: TurnRequestOutcome = {
                 message: "ErrInvalidGameId",
                 status: "Error",
                 turnType: "Unknown"
@@ -186,7 +191,7 @@ export default class GameServer {
         });
 
         socket.on("move request", (piece, destination, callback) => {
-            const err: MovementEventOutcome = {
+            const err: MovementRequestOutcome = {
                 message: "ErrInvalidGameId",
                 status: "Error",
                 turnType: "Movement"
@@ -224,6 +229,7 @@ export default class GameServer {
     public createGame(
         colorAssignmentRule: ColorAssignmentRule,
         startingColor: StartingColor,
+        noFirstQueen?: boolean,
         gameId?: string
     ): string {
         gameId ||= uuidv4();
@@ -231,6 +237,7 @@ export default class GameServer {
 
         this.activeGames[gameId] = {
             game: new HiveGame(startingColor),
+            noFirstQueen: noFirstQueen || false,
             nsp: this.createNamespace(gameId),
             online: {
                 Player: {},

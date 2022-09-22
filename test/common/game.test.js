@@ -114,6 +114,8 @@ describe("When new piece is placed", () => {
         expectSuccess("bQ -bS1");
         expectSuccess("wS wS1-");
     });
+
+    // TODO add test for optional tournament rule (no queen on 1st placement)
 });
 
 describe("When piece is moved", () => {
@@ -156,7 +158,7 @@ describe("When piece is moved", () => {
             "bQ .",
             "wB bQ-"
         );
-        expect(forceMove("bQ wB\\").message).toBe("ErrInvalidDestination");
+        expectError("bQ wB\\", "ErrInvalidDestination");
     });
 
     it("rejects if destination is the same as origin", () => {
@@ -294,6 +296,8 @@ describe("When piece is moved", () => {
 });
 
 // TODO test that pass is rejected while other moves are available
+
+// TODO add the most obvious checks of all: when getting legal movements / placements, all returned options must be legal!
 
 describe("When the game is over", () => {
     beforeEach(() => game = new HiveGame());

@@ -90,13 +90,13 @@ it("Correctly calculates cut vertices", () => {
 
 describe("When generating length-N paths", () => {
     const expectYielded = (graph, dist, expected) => {
-        const generator = graphUtils.generateLengthNPaths("0", v => graph.adj(v), dist);
+        const generator = graphUtils.genLengthNPaths("0", v => graph.adj(v), dist);
         const yielded = getYieldedAndReturned(generator).yielded.sort();
         expect(yielded).toEqual(expected.sort());
     };
 
     const checkPathMap = (graph, dist) => {
-        const generator = graphUtils.generateLengthNPaths("0", v => graph.adj(v), dist);
+        const generator = graphUtils.genLengthNPaths("0", v => graph.adj(v), dist);
         const { yielded, returned } = getYieldedAndReturned(generator);
         graph.vertices().forEach(v => {
             if (yielded.indexOf(v) === -1) expect(returned(v)).toHaveLength(0);
@@ -142,13 +142,13 @@ describe("When generating length-N paths", () => {
 
 describe("When generating shortest paths", () => {
     const expectYielded = (graph, dist, filter, expected) => {
-        const generator = graphUtils.generateShortestPaths("0", v => graph.adj(v), dist, filter);
+        const generator = graphUtils.genShortestPaths("0", v => graph.adj(v), dist, filter);
         const yielded = getYieldedAndReturned(generator).yielded.sort();
         expect(yielded).toEqual(expected.sort());
     };
 
     const checkPathMap = (graph, dist, filter) => {
-        const generator = graphUtils.generateShortestPaths("0", v => graph.adj(v), dist, filter);
+        const generator = graphUtils.genShortestPaths("0", v => graph.adj(v), dist, filter);
         const { yielded, returned } = getYieldedAndReturned(generator);
         graph.vertices().forEach(v => {
             if (yielded.indexOf(v) === -1) expect(returned(v)).toHaveLength(0);
@@ -193,7 +193,7 @@ describe("When generating shortest paths", () => {
         const filter = (v, dist) => dist === 1 || parseInt(v) % 2 === 0;
         allGraphs.forEach(g => checkPathMap(g, undefined, filter));
 
-        const generator = graphUtils.generateShortestPaths("0", v => graph3.adj(v));
+        const generator = graphUtils.genShortestPaths("0", v => graph3.adj(v));
         const { returned } = getYieldedAndReturned(generator);
         expect(returned("5")).toEqual(["0"]);
         expect(returned("1")).toEqual(["0"]);
@@ -207,7 +207,7 @@ describe("When merging move paths", () => {
         const path1 = v => ({ "1": ["2", "3"] })[v] || [];
         const path2 = v => ({ "2": ["3"] })[v] || [];
         const path3 = v => ({ "1": ["5"] })[v] || [];
-        const merged = GraphUtils.mergePathMaps(path1, path2, path3);
+        const merged = GraphUtils.mergePaths(path1, path2, path3);
         expect(merged("1")).toEqual(["2", "3"]);
         expect(merged("2")).toEqual(["3"]);
         expect(merged("3")).toEqual([]);

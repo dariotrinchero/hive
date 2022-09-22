@@ -2,7 +2,7 @@ import { Fragment, h } from "preact";
 
 import "@/client/styles/PieceTile";
 
-import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
+import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
 import type { BaseTileProps } from "@/types/client/tile";
 
 export type PieceTileState = "Normal" | "Inactive" | "Selected" | "Shaking";

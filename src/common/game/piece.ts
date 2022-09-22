@@ -1,4 +1,4 @@
-import type { Inventory, PieceColor } from "@/types/common/piece";
+import type { Inventory, PieceColor } from "@/types/common/game/piece";
 
 export enum Colors {
     Black,

@@ -1,7 +1,7 @@
-import { pieceInventory } from "@/common/piece";
-import { Bugs } from "@/common/piece";
+import { pieceInventory } from "@/common/game/piece";
+import { Bugs } from "@/common/game/piece";
 
-import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
+import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
 import type { Direction, LatticeCoords, PieceToPos, PosToPiece, RelativePosition } from "@/types/common/game/hexGrid";
 
 export enum PlanarDirection {
@@ -36,6 +36,11 @@ export default abstract class HexGrid {
         return piece1.color === piece2.color
             && piece1.type === piece2.type
             && piece1.index === piece2.index;
+    }
+
+    public static entriesOfPosRecord<T>(posToX: Record<string, T>): [LatticeCoords, T][] {
+        return Object.entries(posToX).map(([posStr, value]) =>
+            [posStr.split(",").map(str => parseInt(str)) as LatticeCoords, value]);
     }
 
     protected getPieceAt(pos: LatticeCoords): Piece | undefined {
@@ -81,6 +86,55 @@ export default abstract class HexGrid {
 
     protected adjPieces(pos: LatticeCoords): Piece[] {
         return this.adjPieceCoords(pos).map(pos => this.getPieceAt(pos) as Piece);
+    }
+
+    /**
+     * Get adjacent positions that a piece is able to slide into, keeping contact with hive.
+     * 
+     * @param pos position from which to find adjacencies
+     * @param ignore position which should be treated as empty (eg. position of piece in transit)
+     * @returns adjacent valid slide positions
+     */
+    protected adjSlideSpaces(pos: LatticeCoords, ignore?: LatticeCoords): LatticeCoords[] {
+        return this.adjCoords(pos).filter((adjPos, i, arr) => {
+            const gatePos = [5, 1].map(d => arr[(i + d) % 6]);
+            const shouldIgnore = (adjPos: LatticeCoords) => ignore && HexGrid.eqPos(adjPos, ignore);
+
+            let canSlide: boolean | undefined = !this.getPieceAt(adjPos);
+            if (!this.getPieceAt(gatePos[0]) || shouldIgnore(gatePos[0])) {
+                canSlide &&= this.getPieceAt(gatePos[1]) && !shouldIgnore(gatePos[1]);
+            } else {
+                canSlide &&= !this.getPieceAt(gatePos[1]) || shouldIgnore(gatePos[1]);
+            }
+            return canSlide;
+        });
+    }
+
+    /**
+     * Get adjacent positions that a piece is able to climb up/down onto, obeying freedom-to-move rule.
+     * 
+     * @param pos position from which to find adjacencies
+     * @param ignore position which should be treated as containing one fewer piece (eg. position of piece in transit)
+     * @param dismount if true/false, only return moves that specifically do/don't dismount the hive;
+     *                 otherwise returns all kind of moves along top of hive
+     * @returns adjacent valid mount positions
+     */
+    protected adjMounts(pos: LatticeCoords, ignore?: LatticeCoords, dismount?: boolean): LatticeCoords[] {
+        let height = this.getPieceAt(pos)?.height || 0;
+        if (ignore && HexGrid.eqPos(pos, ignore)) height -= 1;
+
+        return this.adjCoords(pos).filter((adjPos, i, arr) => {
+            if (ignore && HexGrid.eqPos(adjPos, ignore)) return false;
+
+            const gateHeights = [5, 1].map(d => this.getPieceAt(arr[(i + d) % 6])?.height || 0);
+            const destination = this.getPieceAt(adjPos);
+
+            let canMount: boolean | undefined = Math.min(...gateHeights) <= Math.max(height, destination?.height || 0);
+            if (dismount === true) canMount &&= !destination;
+            else if (dismount === false) canMount &&= typeof destination !== "undefined";
+            else canMount &&= typeof destination !== "undefined" || height >= 1;
+            return canMount;
+        });
     }
 
     protected relToAbs(pos: RelativePosition): LatticeCoords | undefined {

@@ -2,7 +2,7 @@ import type { Namespace, Socket } from "socket.io";
 
 import type HiveGame from "@/common/game/game";
 
-import type { PieceColor } from "@/types/common/piece";
+import type { PieceColor } from "@/types/common/game/piece";
 import type { ClientToServer, ClientType, InterServer, ServerToClient, SocketData } from "@/types/common/socket";
 
 export type OnlineSessions = {
@@ -28,6 +28,7 @@ export interface GameDetails {
         rule: ColorAssignmentRule;
     },
     startingColor: PieceColor;
+    noFirstQueen: boolean;
 }
 export type ActiveGames = {
     [gameId: string]: GameDetails;

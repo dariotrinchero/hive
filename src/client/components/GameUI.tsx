@@ -3,15 +3,15 @@ import { Component, Fragment, h } from "preact";
 import HiveGame from "@/common/game/game";
 import GameClient from "@/client/utility/gameClient";
 
-import type { Piece, PieceColor } from "@/types/common/piece";
-import type { MovementCheckOutcome } from "@/types/common/game/game";
+import type { Piece, PieceColor } from "@/types/common/game/piece";
+import type { GetMovementResult } from "@/types/common/game/outcomes";
 import type { GameState } from "@/types/common/socket";
 
 import Board from "@/client/components/Board";
 import Spinner from "./Spinner";
 
 export interface MoveAvailability {
-    outcome: MovementCheckOutcome;
+    outcome: GetMovementResult;
     premove: boolean;
 }
 
@@ -39,17 +39,12 @@ export default class GameUI extends Component<Record<string, never>, GameUIState
         this.client = new GameClient(spectate, refreshRendering);
     }
 
-    public checkForMove(piece: Piece): MoveAvailability {
+    private getMoves(piece: Piece): MoveAvailability {
         const playerColor: PieceColor | undefined = this.client.getPlayerColor();
         return {
-            outcome: this.client.game.checkPieceForMove(piece, undefined, playerColor),
+            outcome: this.client.game.getMovements(piece, playerColor),
             premove: playerColor !== this.client.game.getCurrTurnColor()
         };
-    }
-
-    private getMoves(piece: Piece, viaPillbug: boolean) {
-        const playerColor: PieceColor | undefined = this.client.getPlayerColor();
-        return this.client.game.generateLegalMoves(piece, viaPillbug, playerColor);
     }
 
     public override render(): h.JSX.Element {
@@ -58,7 +53,6 @@ export default class GameUI extends Component<Record<string, never>, GameUIState
         // improve this by having game / gameClient be aware of whether game is "pending"
         const playerColor: PieceColor | undefined = this.client.getPlayerColor();
         return (
-            // TODO add other game-related components here
             <Fragment>
                 <h1>{playerColor || "...waiting for opponent"}</h1>
                 <span>{playerColor === this.client.game.getCurrTurnColor() ? "Your turn" : <span>&nbsp;</span>}</span>
@@ -68,8 +62,7 @@ export default class GameUI extends Component<Record<string, never>, GameUIState
                         piecePositions={this.state.posToPiece}
                         currTurnColor={this.state.currTurnColor}
                         getMoves={this.getMoves.bind(this)}
-                        checkForMove={this.checkForMove.bind(this)}
-                        doMove={this.client.queueMove.bind(this.client)}
+                        attemptMove={this.client.queueMove.bind(this.client)}
                     />
                     : <Spinner />}
             </Fragment>

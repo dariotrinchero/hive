@@ -25,7 +25,7 @@ export default class GraphUtils<V> {
      * @param paths array of path maps to merge
      * @returns path map obtained by merging all of the given path maps in the way described above
      */
-    public static mergePathMaps<V>(...paths: PathMap<V>[]): PathMap<V> {
+    public static mergePaths<V>(...paths: PathMap<V>[]): PathMap<V> {
         return (vertex: V) => {
             // return first path provided by any path-function collected
             for (const path of paths) {
@@ -42,7 +42,7 @@ export default class GraphUtils<V> {
      * which yields successively from each of those given. Finally, return a new path map which is the
      * result of merging all of those returned by the given generators.
      * 
-     * @see mergePathMaps
+     * @see mergePaths
      * @param generators array of generators to merge
      * @yields all vertices yielded by each of the given generators in turn
      * @returns path map obtained by merging all of the path maps returned by the given generators
@@ -62,7 +62,7 @@ export default class GraphUtils<V> {
             paths.push(next.value);
         }
 
-        return GraphUtils.mergePathMaps(...paths);
+        return GraphUtils.mergePaths(...paths);
     }
 
     /**
@@ -124,7 +124,7 @@ export default class GraphUtils<V> {
      * @yields all reached vertices which pass the filter function
      * @returns map to get shortest path from source vertex to given yielded vertex
      */
-    public *generateShortestPaths(source: V, adj: BFSAdj<V>, maxDist?: number, filter?: Filter<V>): Generator<V, PathMap<V>> {
+    public *genShortestPaths(source: V, adj: BFSAdj<V>, maxDist?: number, filter?: Filter<V>): Generator<V, PathMap<V>> {
         // yield valid endpoints
         const generator = this.bfs(source, adj, maxDist, filter);
         let next = generator.next();
@@ -163,7 +163,7 @@ export default class GraphUtils<V> {
      * @yields all vertices reached within given number of steps
      * @returns map to get (any possible) length-'steps' path from source vertex to given yielded vertex
      */
-    public *generateLengthNPaths(source: V, adj: BFSAdj<V>, steps: number): Generator<V, PathMap<V>> {
+    public *genLengthNPaths(source: V, adj: BFSAdj<V>, steps: number): Generator<V, PathMap<V>> {
         let currSet: { [v: string]: V; } = { [this.stringify(source)]: source };
         const edgeTo: { [v: string]: V; } = {};
 

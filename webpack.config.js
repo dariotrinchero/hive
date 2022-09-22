@@ -3,10 +3,13 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const nodeExternals = require('webpack-node-externals');
 
 module.exports = (env, args) => {
+    // check if running in production mode
+    const inProd = () => args.mode !== "development";
+
     // Config shared by client & server:
-    const common = args => ({
+    const common = {
         mode: args.mode, // "development" | "production"
-        devtool: 'inline-source-map',
+        devtool: inProd() ? undefined : 'inline-source-map',
         optimization: { usedExports: true },
         resolve: {
             alias: { '@': path.resolve(__dirname, 'src') },
@@ -25,11 +28,11 @@ module.exports = (env, args) => {
                 }
             ],
         },
-    });
+    };
 
     // Dev-server config:
-    const publicPath = args.mode !== "development" ? "" :`/game/${env.gameId}/`;
-    const devServer = args => args.mode !== "development" ? {} : {
+    const publicPath = inProd() ? "" : `/game/${env.gameId}/`;
+    const devServer = inProd() ? {} : {
         devServer: {
             static: { directory: path.resolve(__dirname, 'dist/client') },
             devMiddleware: {
@@ -49,8 +52,8 @@ module.exports = (env, args) => {
             },
         },
     };
-    const fixedPublicPath = args => args.mode !== "development" ? {} : { publicPath };
 
+    const fixedPublicPath = inProd() ? {} : { publicPath };
     return [
         {
             // Node server:
@@ -63,7 +66,7 @@ module.exports = (env, args) => {
             },
             target: 'node',
             externals: [ nodeExternals() ],
-            ...common(args),
+            ...common,
         },
         {
             // Client webpage:
@@ -73,7 +76,7 @@ module.exports = (env, args) => {
                 filename: '[name].[contenthash].js',
                 path: path.resolve(__dirname, 'dist/client'),
                 clean: true,
-                ...fixedPublicPath(args)
+                ...fixedPublicPath
             },
             plugins: [
                 new HtmlWebpackPlugin({ // emit index.html with injected script tag referencing bundle
@@ -81,8 +84,8 @@ module.exports = (env, args) => {
                     template: path.resolve(__dirname, 'index.html'),
                 }),
             ],
-            ...common(args),
-            ...devServer(args)
+            ...common,
+            ...devServer
         }
     ];
 };

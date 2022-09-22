@@ -9,6 +9,9 @@ if (process.argv.length >= 4) {
     gameId = process.argv[3];
 }
 
+// optional rule disabling queen placement on first move
+const noFirstQueen = false;
+
 const server = new GameServer("dist/client", port);
-gameId = server.createGame("FirstJoinIsWhite", "Black", gameId);
+gameId = server.createGame("FirstJoinIsWhite", "Black", noFirstQueen, gameId);
 console.log(`http://localhost:${port}/game/${gameId}/`);

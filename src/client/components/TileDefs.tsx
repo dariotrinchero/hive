@@ -2,7 +2,7 @@ import { h } from "preact";
 
 import * as icons from "@/client/icons.json";
 
-import type { PieceType } from "@/types/common/piece";
+import type { PieceType } from "@/types/common/game/piece";
 import type { HexDimensions } from "@/types/client/tile";
 
 const bugPaths: Record<PieceType, string> = icons;

@@ -4,10 +4,10 @@ import Notation, { ParseError } from "@/client/utility/notation";
 import sum from "@/common/objectHash";
 import HiveGame from "@/common/game/game";
 
-import type { ClientToServer, GameState, ServerToClient, TurnEventOutcome } from "@/types/common/socket";
-import type { GenericTurnOutcome, GenericTurnRequest } from "@/types/common/turn";
+import type { ClientToServer, GameState, ServerToClient, TurnRequestOutcome } from "@/types/common/socket";
+import type { TurnAttempt, TurnResult } from "@/types/common/game/outcomes";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
-import type { Piece, PieceColor } from "@/types/common/piece";
+import type { Piece, PieceColor } from "@/types/common/game/piece";
 
 interface Premove {
     piece: Piece;
@@ -73,7 +73,10 @@ export default class GameClient {
             if (session.spectating) {
                 console.error("Game full; joined as spectator.");
                 this.spectate();
-            } else this.playerColor = session.color;
+            } else {
+                this.playerColor = session.color;
+                this.game.setNoFirstQueen(session.noFirstQueen);
+            }
 
             this.game.setColorToStart(session.startingColor);
         });
@@ -85,7 +88,7 @@ export default class GameClient {
 
         this.socket.on("player turn", (outcome, hash) => {
             if (outcome.status === "Error") return;
-            if (outcome.turnType === "Pass") this.game.passTurn(); // TODO UI should also show turn # etc
+            if (outcome.turnType === "Pass") this.game.passTurn();
             else {
                 const { piece, destination } = outcome;
                 if (outcome.turnType === "Movement") this.game.movePiece(piece, destination);
@@ -129,12 +132,12 @@ export default class GameClient {
 
     // TODO find some way of merging these functions...
 
-    public async processTurns(...turn: GenericTurnRequest[]): Promise<GenericTurnOutcome[]>;
-    public async processTurns(...turnNotation: string[]): Promise<(GenericTurnOutcome | ParseError)[]>;
-    public async processTurns(...turnOrNotation: string[] | GenericTurnRequest[]): Promise<(TurnEventOutcome | ParseError)[]> {
-        const result: (TurnEventOutcome | ParseError)[] = [];
+    public async processTurns(...turn: TurnAttempt[]): Promise<TurnResult[]>;
+    public async processTurns(...turnNotation: string[]): Promise<(TurnResult | ParseError)[]>;
+    public async processTurns(...turnOrNotation: string[] | TurnAttempt[]): Promise<(TurnRequestOutcome | ParseError)[]> {
+        const result: (TurnRequestOutcome | ParseError)[] = [];
         for (const tON of turnOrNotation) {
-            let turn: GenericTurnRequest | ParseError;
+            let turn: TurnAttempt | ParseError;
             if (typeof tON === "string") {
                 turn = Notation.stringToTurnRequest(tON);
                 if (turn === "ParseError") {
@@ -157,7 +160,7 @@ export default class GameClient {
         return result;
     }
 
-    private submitTurnRequest(req: GenericTurnRequest): Promise<[TurnEventOutcome, string]> {
+    private submitTurnRequest(req: TurnAttempt): Promise<[TurnRequestOutcome, string]> {
         return new Promise(resolve =>
             this.socket.emit("turn request", req, (outcome, hash) => resolve([outcome, hash])));
     }

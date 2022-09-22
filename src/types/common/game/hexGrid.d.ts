@@ -1,4 +1,4 @@
-import type { Piece, PieceColor, PieceType } from "@/types/common/piece";
+import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
 import { PlanarDirection } from "@/common/game/hexGrid";
 
 // absolute grid positioning
