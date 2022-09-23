@@ -1,6 +1,7 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const nodeExternals = require('webpack-node-externals');
+const { DefinePlugin } = require("webpack");
 
 module.exports = (env, args) => {
     // check if running in production mode
@@ -31,7 +32,7 @@ module.exports = (env, args) => {
     };
 
     // Dev-server config:
-    const publicPath = inProd() ? "" : `/game/${env.gameId}/`;
+    const publicPath = inProd() ? undefined : `/game/${env.GAME_ID}/`;
     const devServer = inProd() ? {} : {
         devServer: {
             static: { directory: path.resolve(__dirname, 'dist/client') },
@@ -42,18 +43,22 @@ module.exports = (env, args) => {
             compress: true,
             hot: false,
             liveReload: true,
-            port: 8080,
+            port: env.DEV_PORT,
             open: publicPath,
             proxy: {
                 '/socket.io': {
-                    target: `http://localhost:${env.port}`,
+                    target: `http://localhost:${env.PORT}`,
                     ws: true,
                 },
             },
         },
     };
+    const injectEnv = inProd() ? [] : [
+        new DefinePlugin({ // inject environment variable into webpage process.env
+            "process.env.AUTOKILL": JSON.stringify(env.AUTOKILL)
+        })
+    ];
 
-    const fixedPublicPath = inProd() ? {} : { publicPath };
     return [
         {
             // Node server:
@@ -76,13 +81,14 @@ module.exports = (env, args) => {
                 filename: '[name].[contenthash].js',
                 path: path.resolve(__dirname, 'dist/client'),
                 clean: true,
-                ...fixedPublicPath
+                publicPath
             },
             plugins: [
                 new HtmlWebpackPlugin({ // emit index.html with injected script tag referencing bundle
                     inject: true,
                     template: path.resolve(__dirname, 'index.html'),
                 }),
+                ...injectEnv
             ],
             ...common,
             ...devServer

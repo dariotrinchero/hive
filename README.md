@@ -22,27 +22,86 @@ Since the game state is distributed, we need additional code to maintiain parity
 
 Shared Typescript type & interface definitions are in ```src/types```, the structure of which mostly mimics that of ```src```. Finally, unit tests are in ```test```.
 
-## Compiling & running for development
+## Running locally
 
-First, install dependencies with
+### 1. Cloning & installing
+
+Clone the reposistory with
 ```bash
-    npm i
+git clone git@github.com:Doormango/hive.git; cd hive
 ```
+then, install dependencies with
+```bash
+npm i
+```
+
+Note that this project was developed and tested with Node.js version v16.17.0.
+
+### 2. Compiling & running in development mode
+
 Now to compile & bundle both the client and server code, run
 ```bash
-    npm start
+npm start
 ```
-which will recompile whenever the source files change, and should automatically launch a game. Finally, to launch the Express server, which manages the websocket connections, run
+which will recompile whenever the source files change, and should automatically launch the game URL in the default browser. This game will attempt to connect over websockets to a local Node.js server, which must be launched separately. To start the Node server, run
 ```bash
-    npm run serve-dev
+npm run serve-dev
 ```
-which will re-launch the server whenever the compiled server code changes.
+which will also re-launched the server whenever the compiled server code changes.
 
-To actually play the game, you will need to open the game URL in two different browser sessions (which will act as the 2 players). I recommend just copying the URL into a private browsing window.
+
+There is also the alternative script
+```bash
+npm run watch
+```
+which will compile & bundle both client and server code (and recompile upon source code changes), but will not launch anything (neither the client webpage nor the Node server). This is useful to check whether code changes compile without spawning spurious browser windows.
+
+### 3. Playing the game locally
+
+To actually play the game, you will need to open the game URL in two different browser sessions (which will act as the 2 players). Running ```npm start``` should automatically open one game session - I recommend just copying this URL into a separate private browsing window to act as the second game session.
+
+## One Script to Rule Them All
+
+There is a problem with the development workflow as described in the previous section; namely, the scripts ```npm start``` and ```npm run serve-dev``` almost always need to be running in tandem. This causes some annoyances:
+
+1. two terminal windows are needed to keep both scripts running
+2. we must ensure never to launch or kill one script without the other
+3. we must ensure never to have two running instances of either script
+4. since ```npm start``` always spawns a new browser window, we must manually close the orphaned browser tabs whenever killing either script 
+
+**There is a script which addresses all of these issues** using ```tmux```:
+```bash
+npm run tmux
+```
+This will create a new ```tmux``` session named "```hive```" (or attach to it if it already exists), in which two panes are launched (or restarted if they already exist), each running one of the aforementioned scripts. The entire ```tmux``` session is automatically killed whenever either script exits. This way we ensure that both commands spawn, persist, and die together.
+
+We also pass an additional environment variable, ```autokill```, to Webpack, which is read by a custom Webpack plugin, which in turn sets the environment variable ```process.env.KILL_ON_DISCONNECT``` in the compiled webpage code. Having this environment variable set causes the game client to automatically kill the browser tab whenever the connection to the websocket server is dropped.
+
+This *almost* solves the issue of orphaned brower tabs. Firefox currently does not allow tabs which were not programmatically spawned to close themselves. Therefore, the browser tab which is automatically opened by Webpack will happily kill itself when needed, but to get the private browsing tab to close, we need to also programmatically spawn this tab.
+
+The current workaround is as follows: when ```tmux``` launches, it will also open a third pane, and *send* (but not run) the command
+```bash
+firefox --private-window http://localhost:$npm_package_config_devServerPort/game/$npm_package_config_devGameId/'
+```
+to open a second copy of the game in a Firefox private browsing window. When we want the second player to join, we can simply press enter to run this command. Not only does this allow the new tab to later kill itself, it is also easier than manually copying the URL to a new private browsing window.
 
 ## Running unit tests
 
 To run all tests and print coverage with Jest, simply run
 ```bash
-    npm t
+npm t
 ```
+
+## Building & running for production
+
+The script
+```bash
+npm run build
+```
+will automatically lint, test, compile, and bundle the project in development mode, where minification is active, and source mappings are disabled.
+
+After building in this way, the script
+```bash
+npm run serve
+```
+will launch the Node server to serve the static client page via Express, and handle incoming websocket connections.

@@ -14,6 +14,9 @@ interface Premove {
     destination: LatticeCoords;
 }
 
+// key used to persist session ID in local storage
+const localStorageSessionIdName = "sessionId";
+
 export default class GameClient {
     // networking-related
     private readonly socket: Socket<ServerToClient, ClientToServer>;
@@ -36,7 +39,7 @@ export default class GameClient {
         this.refreshRendering = refreshRendering;
 
         this.socket = io(document.location.pathname, {
-            auth: { sessionId: localStorage.getItem("sessionId") }
+            auth: { sessionId: localStorage.getItem(localStorageSessionIdName) }
         });
         this.bindSocketEvents();
     }
@@ -68,7 +71,7 @@ export default class GameClient {
 
         this.socket.on("session", session => {
             this.socket.auth = { sessionId: session.sessionId };
-            localStorage.setItem("sessionId", session.sessionId);
+            localStorage.setItem(localStorageSessionIdName, session.sessionId);
 
             if (session.spectating) {
                 console.error("Game full; joined as spectator.");
@@ -82,8 +85,10 @@ export default class GameClient {
         });
 
         this.socket.on("connect_error", err => {
-            // TODO display error to user
-            console.error("Error connecting", err);
+            console.error("Error connecting", err); // TODO display error to user
+
+            // environment variable set in package.json & injected by webpack
+            if (process.env.AUTOKILL) window.close();
         });
 
         this.socket.on("player turn", (outcome, hash) => {

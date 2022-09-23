@@ -5,16 +5,18 @@
   "main": "src/server/index.ts",
   "config": {
     "devGameId": "development-game",
-    "port": "3001"
+    "devServerPort": 8080,
+    "nodePort": 3001
   },
   "scripts": {
     "lint": "eslint .",
     "build": "npm run lint && npm run test && webpack --progress --mode production",
     "serve": "nodemon dist/server/server.js",
-    "start": "webpack serve --mode development --env port=$npm_package_config_port gameId=$npm_package_config_devGameId",
-    "serve-dev": "nodemon dist/server/server.js $npm_package_config_port $npm_package_config_devGameId",
-    "watch": "webpack --watch --mode development --env port=$npm_package_config_port gameId=$npm_package_config_devGameId",
-    "test": "jest --coverage"
+    "start": "webpack serve --mode development --env PORT=$npm_package_config_nodePort DEV_PORT=$npm_package_config_devServerPort GAME_ID=$npm_package_config_devGameId",
+    "serve-dev": "nodemon dist/server/server.js $npm_package_config_nodePort $npm_package_config_devGameId",
+    "watch": "webpack --watch --mode development --env PORT=$npm_package_config_nodePort DEV_PORT=$npm_package_config_devServerPort GAME_ID=$npm_package_config_devGameId",
+    "test": "jest --coverage",
+    "tmux": "tmux new-session -A -s hive \\; set-hook -t 0 pane-exited 'kill-session -t hive' \\; respawnw -k -t 0 'npm start AUTOKILL' \\; neww -k -t 1 'npm run serve-dev' \\; joinp -h -s 1.0 -t 0.0 \\; neww -t 1 \\; joinp -v -s 1.0 -t 0.1 \\; send 'firefox --private-window http://localhost:$npm_package_config_devServerPort/game/$npm_package_config_devGameId/'"
   },
   "author": "doormango",
   "license": "ISC",
