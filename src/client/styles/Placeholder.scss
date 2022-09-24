@@ -1,17 +1,17 @@
 .placeholder {
-    stroke: #e50bbd77;
-    fill: #ffffff00;
+    stroke: hsla(311, 91%, 52%, 0.5);
+    fill: hsla(0, 0%, 100%, 0);
 
     &:hover {
-        fill: #e50bbd33;
+        fill: hsla(311, 91%, 52%, 0.2);
         cursor: pointer;
     }
 
-    &.pillbug {
-        stroke: #49ad92bb;
+    &.Pillbug {
+        stroke: hsla(164, 41%, 48%, 0.733);
 
         &:hover {
-            fill: #49ad9277;
+            fill: hsla(164, 41%, 48%, 0.467);
         }
     }
 }

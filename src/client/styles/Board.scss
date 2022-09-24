@@ -1,17 +1,20 @@
 // Length of move path dashes
-$dashon: 16;
-$dashoff: 12;
+$dashon: 26;
+$dashoff: 22;
+
+// animation duration
+$duration: 0.7s;
 
 .move-path {
-    stroke: #b80fc755;
-    stroke-width: 8px;
+    stroke: hsla(295, 86%, 62%, 0.7);
+    stroke-width: 11px;
     fill: none;
     stroke-dasharray: $dashon, $dashoff;
     pointer-events: none;
-    animation: 2s linear 0s infinite normal none running dashflow;
+    animation: $duration linear 0s infinite normal none running dashflow;
 
-    &.pillbug {
-        stroke: #46a088bb;
+    &.Pillbug {
+        stroke: hsla(164, 39%, 45%, 0.7);
     }
 }
 

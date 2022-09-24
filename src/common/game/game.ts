@@ -22,7 +22,7 @@ import type {
     TurnAttempt,
     TurnResult
 } from "@/types/common/game/outcomes";
-import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
+import type { Inventory, Piece, PieceColor, PieceType } from "@/types/common/game/piece";
 import type { GameState } from "@/types/common/socket";
 import type {
     GameStatus,
@@ -113,9 +113,15 @@ export default class HiveGame extends HexGrid {
     }
 
     public getCurrTurnColor(): PieceColor { return this.currTurnColor; }
+
     private getNextTurnColor(): PieceColor { return invertColor(this.currTurnColor); }
+
     public getTurnCount(): number { return this.turnCount; }
+
+    public getInventory(color: PieceColor): Inventory { return this.playerInventories[color]; }
+
     public setNoFirstQueen(nfq: boolean): void { this.noFirstQueen = nfq; }
+
     public setColorToStart(color: PieceColor): void {
         if (this.turnCount === 0) this.currTurnColor = color;
     }

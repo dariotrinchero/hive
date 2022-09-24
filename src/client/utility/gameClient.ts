@@ -23,19 +23,15 @@ export default class GameClient {
 
     // game-related
     public game: HiveGame;
-    private playerColor?: PieceColor;
+    private playerColor: PieceColor | "Spectating";
     private premove?: Premove;
 
     // callbacks for rendering
-    private readonly spectate: () => void;
     private readonly refreshRendering: () => void;
 
-    constructor(
-        spectate: () => void,
-        refreshRendering: () => void
-    ) {
+    constructor(refreshRendering: () => void) {
         this.game = new HiveGame();
-        this.spectate = spectate;
+        this.playerColor = "Spectating";
         this.refreshRendering = refreshRendering;
 
         this.socket = io(document.location.pathname, {
@@ -44,7 +40,7 @@ export default class GameClient {
         this.bindSocketEvents();
     }
 
-    public getPlayerColor(): PieceColor | undefined {
+    public getPlayerColor(): PieceColor | "Spectating" {
         return this.playerColor;
     }
 
@@ -75,7 +71,7 @@ export default class GameClient {
 
             if (session.spectating) {
                 console.error("Game full; joined as spectator.");
-                this.spectate();
+                this.playerColor = "Spectating";
             } else {
                 this.playerColor = session.color;
                 this.game.setNoFirstQueen(session.noFirstQueen);

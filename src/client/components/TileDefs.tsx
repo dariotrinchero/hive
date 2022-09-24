@@ -1,9 +1,17 @@
-import { h } from "preact";
+import { Fragment, h } from "preact";
 
-import * as icons from "@/client/icons.json";
+import icons from "@/client/icons.json";
 
 import type { PieceType } from "@/types/common/game/piece";
 import type { HexDimensions } from "@/types/client/tile";
+
+export interface TileDefsProps {
+    dims: HexDimensions;
+    omit?: {
+        placeholder?: boolean;
+        bugs?: boolean;
+    };
+}
 
 const bugPaths: Record<PieceType, string> = icons;
 
@@ -32,28 +40,63 @@ const roundedHexPath: (hexRad: number, cornerRad: number) => string = (hexRad, c
     return hexPath + "Z"; // close path
 };
 
-const TileDefs: (props: HexDimensions) => h.JSX.Element = props => (
-    <defs>
-        <path
-            id="hex"
-            d={roundedHexPath(100, props.cornerRad)} // hex radius is globally fixed to 100
-        />
-        <g
-            id="placeholder"
-            style={`stroke-width: ${0.6 * props.gap}`}
-        >
-            {[0.95, 0.6].map((scale, index) =>
-                <use
-                    key={index}
-                    xlinkHref="#hex"
-                    transform={`scale(${scale})`}
-                    style={index === 0 ? "stroke-dasharray: 8,4" : ""}
-                />
-            )}
-        </g>
-        {Object.entries(bugPaths).map(([bug, path]) =>
-            <path key={bug} id={bug} d={path} />)}
-    </defs>
+/**
+ * Render bug icon paths, each with ID set to the bug type.
+ * 
+ * @param props props for this component, including whether to define bug paths
+ * @returns Fragment containing a child path for each bug type
+ */
+const renderBugDefs: (props: TileDefsProps) => h.JSX.Element = props => (
+    <Fragment>
+        {!props.omit?.bugs &&
+            Object.entries(bugPaths).map(([bug, path]) =>
+                <path key={bug} id={bug} d={path} />)
+        }
+    </Fragment>
 );
+
+/**
+ * Render placeholder group (with ID #placeholder).
+ * 
+ * @param props props for this component, including whether to define placeholders
+ * @returns Fragment containing a child group containing prototypical placeholder
+ */
+const renderPlaceholderDefs: (props: TileDefsProps) => h.JSX.Element = props => (
+    <Fragment>
+        {!props.omit?.placeholder &&
+            <g
+                id="placeholder"
+                style={`stroke-width: ${0.7 * props.dims.gap}px`}
+            >
+                {[0.95, 0.6].map((scale, index) =>
+                    <use
+                        key={index}
+                        xlinkHref="#rounded-hex"
+                        transform={`scale(${scale})`}
+                        style={index === 0 ? "stroke-dasharray:10,6" : ""}
+                    />
+                )}
+            </g>
+        }
+    </Fragment>
+);
+
+const TileDefs: (props: TileDefsProps) => h.JSX.Element = props => {
+    return (
+        <defs>
+            <g
+                id="outlined-rounded-hex"
+                style={`stroke-width:${props.dims.gap * Math.sqrt(3)};`}
+            >
+                <path
+                    id="rounded-hex"
+                    d={roundedHexPath(100, props.dims.cornerRad)} // hex radius is globally fixed to 100
+                />
+            </g>
+            {renderPlaceholderDefs(props)}
+            {renderBugDefs(props)}
+        </defs>
+    );
+};
 
 export default TileDefs;

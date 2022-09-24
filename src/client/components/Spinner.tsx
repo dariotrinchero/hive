@@ -16,14 +16,14 @@ const style = `translate: ${shift.join("px ")}px;`
 
 const Spinner: () => h.JSX.Element = () => (
     <TileContainer
-        initViewboxBound={8}
+        viewRange={8}
         panAndZoom={false}
         hexDims={hexDims}
     >
         <g class="spinner">
-            <use xlinkHref="#hex" />
+            <use xlinkHref="#rounded-hex" />
             <use
-                xlinkHref="#hex"
+                xlinkHref="#rounded-hex"
                 class="rolling"
                 style={style}
             />

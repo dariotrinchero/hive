@@ -18,21 +18,25 @@ import Placeholder from "@/client/components/Placeholder";
 import PieceTile, { PieceTileState } from "@/client/components/PieceTile";
 import TileContainer from "@/client/components/TileContainer";
 
+type GetMoveFn = (piece: Piece) => MoveAvailability;
+type DoMoveFn = (piece: Piece, destination: LatticeCoords) => void;
+
 export interface BoardProps {
     // board layout
     piecePositions: PosToPiece;
     currTurnColor: PieceColor;
 
-    // interactivity
-    interactable: boolean;
-    getMoves: (piece: Piece) => MoveAvailability;
-    attemptMove: (piece: Piece, destination: LatticeCoords) => void;
+    // potential interactivity
+    interactivity?: {
+        getMoves: GetMoveFn;
+        attemptMove: DoMoveFn;
+    };
 }
 
 interface BoardState {
     from: LatticeCoords;
     to: LatticeCoords;
-    movementType: MovementType;
+    moveType: MovementType;
     pathMap: PathMap<LatticeCoords>;
     placeholders: MovementOptions;
     tileShake: LatticeCoords;
@@ -61,7 +65,7 @@ export default class Board extends Component<BoardProps, BoardState> {
     private static initialState(): BoardState {
         return {
             from: [NaN, NaN],
-            movementType: "Normal",
+            moveType: "Normal",
             pathMap: () => [],
             placeholders: {},
             tileShake: [NaN, NaN],
@@ -84,11 +88,11 @@ export default class Board extends Component<BoardProps, BoardState> {
         );
     }
 
-    private handlePlaceholderClick = (pos: LatticeCoords) => {
+    private handlePlaceholderClick = (attemptMove: DoMoveFn, pos: LatticeCoords) => {
         const { from } = this.state;
         if (from) {
             const piece = this.props.piecePositions[from.join(",")];
-            if (piece) this.props.attemptMove(piece, pos);
+            if (piece) attemptMove(piece, pos);
             else {
                 // TODO should never be reachable; still, show error to user
                 console.error("Piece to move is no longer in its expected starting location.");
@@ -96,34 +100,44 @@ export default class Board extends Component<BoardProps, BoardState> {
             this.resetState();
         }
     };
-    private handlePlaceholderHover = (pos: LatticeCoords, movementType: MovementType) =>
-        this.setState({ movementType, to: pos });
+    private handlePlaceholderHover = (pos: LatticeCoords, type: MovementType) =>
+        this.setState({ moveType: type, to: pos });
 
     /**
-     * Render tiles for each of the active placeholders.
+     * Render move path & tile for each active placeholder, as long as board is interactive.
      * 
-     * @returns Fragment containing a child Tile for each placeholder on the board
+     * @param props props of this component, containing interactivity callbacks
+     * @returns Fragment containing move path & child Tile for each placeholder on board
      */
-    private renderPlaceholders(): h.JSX.Element {
+    private renderPlaceholdersAndPath(props: BoardProps): h.JSX.Element | undefined {
+        if (!props.interactivity) return;
+
+        const { to, pathMap, moveType: pathMapType } = this.state;
+        const { attemptMove } = props.interactivity;
+        const movePath = "M" + [to].concat(pathMap(to))
+            .map(p => ConvertCoords.hexLatticeToSVG(hexDims.gap, ...p).join(","))
+            .join("L");
+
         return (
-            <Fragment>{
-                HexGrid.entriesOfPosRecord(this.state.placeholders).map(([pos, movementType]) => (
+            <Fragment>
+                {HexGrid.entriesOfPosRecord(this.state.placeholders).map(([pos, type]) => (
                     <Placeholder
-                        key={`${pos.join(",")}${movementType}`}
+                        key={`${pos.join(",")}${type}`}
                         pos={ConvertCoords.hexLatticeToSVG(hexDims.gap, ...pos)}
-                        handleClick={this.handlePlaceholderClick.bind(this, pos)}
-                        handleMouseEnter={this.handlePlaceholderHover.bind(this, pos, movementType)}
-                        movementType={movementType}
+                        handleClick={this.handlePlaceholderClick.bind(this, attemptMove, pos)}
+                        handleMouseEnter={this.handlePlaceholderHover.bind(this, pos, type)}
+                        type={type}
                     />
-                ))
-            }</Fragment>
+                ))}
+                <path class={`move-path ${pathMapType}`} d={movePath} />
+            </Fragment>
         );
     }
 
-    private handlePieceTileClick = (piece: Piece, pos: LatticeCoords) => {
+    private handlePieceTileClick = (getMoves: GetMoveFn, piece: Piece, pos: LatticeCoords) => {
         const { from } = this.state;
         if (isNaN(from[0])) { // clicking unselected piece
-            const { outcome } = this.props.getMoves(piece); // TODO does not distinguish premoves
+            const { outcome } = getMoves(piece); // TODO does not distinguish premoves
             if (outcome.status === "Success") {
                 const { pathMap, options } = outcome;
                 this.setState({ from: pos, pathMap, placeholders: options, tileShake: [NaN, NaN] });
@@ -146,7 +160,7 @@ export default class Board extends Component<BoardProps, BoardState> {
             <Fragment>{
                 HexGrid.entriesOfPosRecord(props.piecePositions).map(([pos, piece]) => {
                     let state: PieceTileState = "Inactive";
-                    if (props.interactable) {
+                    if (props.interactivity) {
                         if (HexGrid.eqPos(pos, tileShake)) state = "Shaking";
                         else if (HexGrid.eqPos(pos, from)) state = "Selected";
                         else if (isNaN(from[0])) state = "Normal";
@@ -155,15 +169,16 @@ export default class Board extends Component<BoardProps, BoardState> {
                     // key changes for shaking tiles to force remount (needed to restart CSS animations)
                     // see: https://css-tricks.com/restart-css-animation/
                     const key = `${Notation.pieceToString(piece)}${state === "Shaking" ? "~" : ""}`;
+                    const handleClick = props.interactivity &&
+                        this.handlePieceTileClick.bind(this, props.interactivity.getMoves, piece, pos);
 
                     return (
                         <PieceTile
                             // TODO without key, all pieces transition at once, but with one nothing transitions
                             key={key}
-                            strokeWidth={hexDims.gap * Math.sqrt(3)}
                             piece={piece}
                             pos={ConvertCoords.hexLatticeToSVG(hexDims.gap, ...pos)}
-                            handleClick={this.handlePieceTileClick.bind(this, piece, pos)}
+                            handleClick={handleClick}
                             state={state}
                         />
                     );
@@ -173,23 +188,14 @@ export default class Board extends Component<BoardProps, BoardState> {
     }
 
     public override render(props: BoardProps): h.JSX.Element {
-        const { to, pathMap, movementType } = this.state;
-        const movePath = "M" + [to].concat(pathMap(to))
-            .map(p => ConvertCoords.hexLatticeToSVG(hexDims.gap, ...p).join(","))
-            .join("L");
-
         return (
             <TileContainer
-                initViewboxBound={5}
+                viewRange={5.3}
                 panAndZoom={true}
                 hexDims={hexDims}
             >
                 {this.renderPieceTiles(props)}
-                {this.renderPlaceholders()}
-                <path
-                    class={`move-path ${movementType === "Pillbug" ? "pillbug" : ""}`}
-                    d={movePath}
-                />
+                {this.renderPlaceholdersAndPath(props)}
             </TileContainer>
         );
     }

@@ -1,3 +1,8 @@
+@use "sass:map";
+@use "sass:color";
+
+@use "@/client/styles/PieceTile";
+
 $duration: 0.6s;
 $snap: 0.8;
 
@@ -5,7 +10,7 @@ $snap: 0.8;
     animation: rotategroup $duration * 6 step-start 0s infinite normal forwards;
 
     use {
-        fill: #363430ee;
+        fill: color.adjust(map.get(PieceTile.$tile-colors, "Black"), $alpha: -0.1);
     }
 
     .rolling {
@@ -14,7 +19,6 @@ $snap: 0.8;
 }
 
 @keyframes hexroll {
-
     from {
         rotate: 0deg;
     }

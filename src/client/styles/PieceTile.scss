@@ -1,17 +1,48 @@
+$bug-colors: (
+    Ant: hsl(199, 88%, 50%),
+    Beetle: hsl(253, 31%, 60%),
+    Grasshopper: hsl(126, 60%, 46%),
+    Ladybug: hsl(356, 69%, 50%),
+    Mosquito: hsl(0, 0%, 65%),
+    Pillbug: hsl(164, 41%, 48%),
+    QueenBee: hsl(38, 97%, 60%),
+    Spider: hsl(28, 56%, 40%)
+);
+
+@each $bug, $color in $bug-colors {
+    ##{$bug} {
+        fill: $color;
+        stroke: $color;
+        stroke-width: if($bug == "Pillbug", 1px, 0px);
+    }
+}
+
+$tile-colors: (
+    "Black": hsl(40, 6%, 20%),
+    "White": hsl(40, 47%, 91%)
+);
+
 .tile {
     transition: translate 150ms ease-in-out 0s;
 
-    &.selected {
-        stroke: #b80fc7;
+    @each $player-color, $color in $tile-colors {
+        .#{$player-color} {
+            fill: $color;
+        }
     }
 
-    &.active:hover,
-    &.selected:hover {
-        stroke: #e50bbd99;
+    &.Selected {
+        stroke: hsla(295, 86%, 42%, 0.8);
+    }
+
+    &.Normal:hover,
+    &.Shaking:hover,
+    &.Selected:hover {
+        stroke: hsla(311, 91%, 47%, 0.65);
         cursor: pointer;
     }
 
-    &.animated {
+    &.Shaking {
         animation: 110ms ease-in-out 0s 3 normal none running tileshake;
     }
 }
