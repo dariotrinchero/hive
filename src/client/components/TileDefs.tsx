@@ -3,14 +3,11 @@ import { Fragment, h } from "preact";
 import icons from "@/client/icons.json";
 
 import type { PieceType } from "@/types/common/game/piece";
-import type { HexDimensions } from "@/types/client/tile";
 
 export interface TileDefsProps {
-    dims: HexDimensions;
-    omit?: {
-        placeholder?: boolean;
-        bugs?: boolean;
-    };
+    cornerRad: number;
+    hexGap: number;
+    onlyRoundedHex?: boolean; // if set, omit bug & placeholder defs
 }
 
 const bugPaths: Record<PieceType, string> = icons;
@@ -22,7 +19,7 @@ const bugPaths: Record<PieceType, string> = icons;
  * @param cornerRad radius of circle arcs to use for rounding corners (cuts off corner)
  * @returns path definition (attribute 'd' of SVG <path> element)
  */
-const roundedHexPath: (hexRad: number, cornerRad: number) => string = (hexRad, cornerRad) => {
+function roundedHexPath(hexRad: number, cornerRad: number): string {
     const thirdPi: number = Math.PI / 3;
     const innerRad: number = hexRad - 2 * cornerRad / Math.sqrt(3);
 
@@ -37,66 +34,65 @@ const roundedHexPath: (hexRad: number, cornerRad: number) => string = (hexRad, c
         hexPath += `${i ? "L" : "M"}${x1},${y1}` // move/line to (x1,y1)
             + `A${cornerRad},${cornerRad},0,0,0,${x2},${y2}`; // arc to (x2,y2)
     }
-    return hexPath + "Z"; // close path
-};
+    return `${hexPath}Z`; // close path
+}
 
 /**
  * Render bug icon paths, each with ID set to the bug type.
  * 
- * @param props props for this component, including whether to define bug paths
  * @returns Fragment containing a child path for each bug type
  */
-const renderBugDefs: (props: TileDefsProps) => h.JSX.Element = props => (
-    <Fragment>
-        {!props.omit?.bugs &&
-            Object.entries(bugPaths).map(([bug, path]) =>
-                <path key={bug} id={bug} d={path} />)
-        }
-    </Fragment>
-);
+function renderBugDefs(): h.JSX.Element {
+    return (
+        <Fragment>
+            {Object.entries(bugPaths).map(([bug, path]) =>
+                <path key={bug} id={bug} d={path} />)}
+        </Fragment>
+    );
+}
 
 /**
  * Render placeholder group (with ID #placeholder).
  * 
- * @param props props for this component, including whether to define placeholders
+ * @param props props for this component, including hex gap
  * @returns Fragment containing a child group containing prototypical placeholder
  */
-const renderPlaceholderDefs: (props: TileDefsProps) => h.JSX.Element = props => (
-    <Fragment>
-        {!props.omit?.placeholder &&
-            <g
-                id="placeholder"
-                style={`stroke-width: ${0.7 * props.dims.gap}px`}
-            >
-                {[0.95, 0.6].map((scale, index) =>
-                    <use
-                        key={index}
-                        xlinkHref="#rounded-hex"
-                        transform={`scale(${scale})`}
-                        style={index === 0 ? "stroke-dasharray:10,6" : ""}
-                    />
-                )}
-            </g>
-        }
-    </Fragment>
-);
-
-const TileDefs: (props: TileDefsProps) => h.JSX.Element = props => {
+function renderPlaceholderDefs(props: TileDefsProps): h.JSX.Element {
     return (
-        <defs>
-            <g
-                id="outlined-rounded-hex"
-                style={`stroke-width:${props.dims.gap * Math.sqrt(3)};`}
-            >
-                <path
-                    id="rounded-hex"
-                    d={roundedHexPath(100, props.dims.cornerRad)} // hex radius is globally fixed to 100
+        <g
+            id="placeholder"
+            style={`stroke-width: ${0.7 * props.hexGap}px`}
+        >
+            {[0.95, 0.6].map((scale, index) =>
+                <use
+                    key={index}
+                    xlinkHref="#rounded-hex"
+                    transform={`scale(${scale})`}
+                    style={index === 0 ? "stroke-dasharray:10,6" : ""}
                 />
-            </g>
-            {renderPlaceholderDefs(props)}
-            {renderBugDefs(props)}
-        </defs>
+            )}
+        </g>
     );
-};
+}
+
+function TileDefs(props: TileDefsProps): h.JSX.Element {
+    return (
+        <svg width={0} height={0}>
+            <defs>
+                <g
+                    id="outlined-rounded-hex"
+                    style={`stroke-width:${props.hexGap * Math.sqrt(3)};`}
+                >
+                    <path
+                        id="rounded-hex"
+                        d={roundedHexPath(100, props.cornerRad)} // hex radius globally fixed to 100
+                    />
+                </g>
+                {!props.onlyRoundedHex && renderPlaceholderDefs(props)}
+                {!props.onlyRoundedHex && renderBugDefs()}
+            </defs>
+        </svg>
+    );
+}
 
 export default TileDefs;

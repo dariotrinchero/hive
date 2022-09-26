@@ -7,7 +7,8 @@ import HiveGame from "@/common/game/game";
 import type { ClientToServer, GameState, ServerToClient, TurnRequestOutcome } from "@/types/common/socket";
 import type { TurnAttempt, TurnResult } from "@/types/common/game/outcomes";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
-import type { Piece, PieceColor } from "@/types/common/game/piece";
+import type { Piece } from "@/types/common/game/piece";
+import type { PlayerColor } from "@/types/client/gameClient";
 
 interface Premove {
     piece: Piece;
@@ -22,16 +23,15 @@ export default class GameClient {
     private readonly socket: Socket<ServerToClient, ClientToServer>;
 
     // game-related
-    public game: HiveGame;
-    private playerColor: PieceColor | "Spectating";
+    public game: HiveGame = new HiveGame();
+    private playerColor: PlayerColor;
     private premove?: Premove;
 
     // callbacks for rendering
-    private readonly refreshRendering: () => void;
+    private readonly refreshRendering: (state: GameState) => void;
 
-    constructor(refreshRendering: () => void) {
-        this.game = new HiveGame();
-        this.playerColor = "Spectating";
+    constructor(refreshRendering: (state: GameState) => void) {
+        this.playerColor = "Spectator";
         this.refreshRendering = refreshRendering;
 
         this.socket = io(document.location.pathname, {
@@ -40,7 +40,7 @@ export default class GameClient {
         this.bindSocketEvents();
     }
 
-    public getPlayerColor(): PieceColor | "Spectating" {
+    public getPlayerColor(): PlayerColor {
         return this.playerColor;
     }
 
@@ -71,7 +71,7 @@ export default class GameClient {
 
             if (session.spectating) {
                 console.error("Game full; joined as spectator.");
-                this.playerColor = "Spectating";
+                this.playerColor = "Spectator";
             } else {
                 this.playerColor = session.color;
                 this.game.setNoFirstQueen(session.noFirstQueen);
@@ -200,13 +200,13 @@ export default class GameClient {
         if (expectedHash !== sum(this.game.getState())) {
             console.warn("Local state out-of-sync with server; retrieving serverside state");
             this.socket.emit("game state request", state => this.loadState(state));
-        } else this.refreshRendering();
+        } else this.refreshRendering(this.game.getState());
     }
 
     private loadState(state: GameState): void {
         console.warn(`Loading state with client-side hash ${sum(state)}`);
         this.game = HiveGame.fromState(state);
-        this.refreshRendering();
+        this.refreshRendering(this.game.getState());
         console.warn(`Loaded state has client-side hash ${sum(this.game.getState())}`);
     }
 }

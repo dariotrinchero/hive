@@ -3,8 +3,10 @@
 
 @use "@/client/styles/PieceTile";
 
-$duration: 0.6s;
-$snap: 0.8;
+// animation controls
+$duration: 0.7s;
+$snap: 0.85;
+$delay: 40%;
 
 .spinner {
     animation: rotategroup $duration * 6 step-start 0s infinite normal forwards;
@@ -20,6 +22,10 @@ $snap: 0.8;
 
 @keyframes hexroll {
     from {
+        rotate: 0deg;
+    }
+
+    #{$delay} {
         rotate: 0deg;
     }
 

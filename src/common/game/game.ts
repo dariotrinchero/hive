@@ -688,7 +688,7 @@ export default class HiveGame extends HexGrid {
         };
 
         if (pieceIsOnBoard) return this.movePiece(turn.piece, pos);
-        else return this.placePiece(turn.piece, pos);
+        return this.placePiece(turn.piece, pos);
     }
 
     /**

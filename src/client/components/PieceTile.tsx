@@ -11,26 +11,26 @@ export interface PieceTileProps extends BaseTileProps {
     state: PieceTileState;
 }
 
-const mouseDown = (props: PieceTileProps, e: MouseEvent) => {
-    e.stopImmediatePropagation(); // prevent interfering with parent component
-    if (props.state !== "Inactive" && props.handleClick) props.handleClick();
-};
-
 // TODO add optional circle on tile with number for stack height / amount in inventory
-const PieceTile: (props: PieceTileProps) => h.JSX.Element = props => {
+function PieceTile(props: PieceTileProps): h.JSX.Element {
     const { type, color } = props.piece;
+    const mouseDown = (e: MouseEvent) => {
+        e.stopImmediatePropagation(); // prevent interfering with parent component
+        if (props.state !== "Inactive" && props.handleClick) props.handleClick();
+    };
+
     return (
         <Fragment>
             <g
                 class={`tile ${props.state}`}
                 style={`translate: ${props.pos.join("px ")}px`}
-                onMouseDown={props.handleClick && mouseDown.bind(this, props)}
+                onMouseDown={props.handleClick && mouseDown}
             >
                 <use xlinkHref="#outlined-rounded-hex" class={color} />
                 <use xlinkHref={`#${type}`} />
             </g>
         </Fragment>
     );
-};
+}
 
 export default PieceTile;

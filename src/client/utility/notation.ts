@@ -1,5 +1,4 @@
-import { pieceInventory } from "@/common/game/piece";
-import { Bugs, Colors } from "@/common/game/piece";
+import { Bugs, Colors, pieceInventory } from "@/common/game/piece";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
 import type { TurnAttempt } from "@/types/common/game/outcomes";
@@ -33,7 +32,7 @@ export default class Notation {
         if (type === "ParseError") return "ParseError";
 
         if (notation.length >= 3) {
-            const index = parseInt(notation.slice(2));
+            const index = parseInt(notation.slice(2), 10);
             if (isNaN(index) || pieceInventory[type] < index) return "ParseError";
             return { color, index, type };
         }

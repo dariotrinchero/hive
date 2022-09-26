@@ -1,5 +1,4 @@
-import { pieceInventory } from "@/common/game/piece";
-import { Bugs } from "@/common/game/piece";
+import { Bugs, pieceInventory } from "@/common/game/piece";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
 import type { Direction, LatticeCoords, PieceToPos, PosToPiece, RelativePosition } from "@/types/common/game/hexGrid";
@@ -40,7 +39,7 @@ export default abstract class HexGrid {
 
     public static entriesOfPosRecord<T>(posToX: Record<string, T>): [LatticeCoords, T][] {
         return Object.entries(posToX).map(([posStr, value]) =>
-            [posStr.split(",").map(str => parseInt(str)) as LatticeCoords, value]);
+            [posStr.split(",").map(str => parseInt(str, 10)) as LatticeCoords, value]);
     }
 
     protected getPieceAt(pos: LatticeCoords): Piece | undefined {
@@ -144,7 +143,7 @@ export default abstract class HexGrid {
         if (!refPos) return;
 
         if (pos.direction === "Above") return refPos;
-        else return this.adjCoords(refPos)[PlanarDirection[pos.direction]];
+        return this.adjCoords(refPos)[PlanarDirection[pos.direction]];
     }
 
     protected absToRel(pos: LatticeCoords): RelativePosition | undefined {

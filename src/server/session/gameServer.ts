@@ -53,29 +53,26 @@ export default class GameServer {
     private assignPlayerColor(playerColors: GameDetails["playerColors"], sessionId: string): PieceColor {
         const colorById = playerColors.byId;
         if (colorById[sessionId]) return colorById[sessionId];
-        else {
-            // This client has not joined previously (as colorById[sessionId] is unset)
-            // & only one other could have joined (as this client is a "Player");
-            // hence this suffices to test for the second player:
-            const isSecondPlayer = Object.keys(colorById).length !== 0;
 
-            let color: PieceColor;
-            const rule = playerColors.rule;
-            if (rule === "Random") {
-                if (isSecondPlayer) color = invertColor(Object.values(colorById)[0]);
-                else color = Math.random() <= 0.5 ? "Black" : "White";
-            } else if (rule === "FirstJoinIsBlack" || rule === "FirstJoinIsWhite") {
-                const firstIsBlack = rule === "FirstJoinIsBlack";
-                if (isSecondPlayer) color = firstIsBlack ? "White" : "Black";
-                else color = firstIsBlack ? "Black" : "White";
-            } else {
-                if (sessionId === rule.sessionId) color = rule.color;
-                else color = invertColor(rule.color);
-            }
+        // This client has not joined previously (as colorById[sessionId] is unset)
+        // & only one other could have joined (as this client is a "Player");
+        // hence this suffices to test for the second player:
+        const isSecondPlayer = Object.keys(colorById).length !== 0;
 
-            // store color by session ID for future
-            return colorById[sessionId] = color;
-        }
+        let color: PieceColor;
+        const rule = playerColors.rule;
+        if (rule === "Random") {
+            if (isSecondPlayer) color = invertColor(Object.values(colorById)[0]);
+            else color = Math.random() <= 0.5 ? "Black" : "White";
+        } else if (rule === "FirstJoinIsBlack" || rule === "FirstJoinIsWhite") {
+            const firstIsBlack = rule === "FirstJoinIsBlack";
+            if (isSecondPlayer) color = firstIsBlack ? "White" : "Black";
+            else color = firstIsBlack ? "Black" : "White";
+        } else if (sessionId === rule.sessionId) color = rule.color;
+        else color = invertColor(rule.color);
+
+        // store color by session ID for future
+        return colorById[sessionId] = color;
     }
 
     private getClientDetails(gameId: string, socket: IOSocket): ClientDetails {
@@ -129,7 +126,7 @@ export default class GameServer {
         clientDetails: ClientDetails,
         errTemplate: T,
         oldHash: string,
-        callback: (out: T, hash: string) => void,
+        callback: (out: T, hash: string) => void
     ): boolean {
         const { clientType, gameDetails: { online, game }, gameId } = clientDetails;
 

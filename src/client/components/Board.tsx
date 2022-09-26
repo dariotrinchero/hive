@@ -1,14 +1,14 @@
-import { Component, Fragment, h } from "preact";
+import { Fragment, h } from "preact";
+import { useEffect, useState } from "preact/hooks";
 
 import "@/client/styles/Board";
 
 import type { LatticeCoords, PosToPiece } from "@/types/common/game/hexGrid";
 import type { PathMap } from "@/types/common/game/graph";
-import type { Piece, PieceColor } from "@/types/common/game/piece";
-import type { MovementOptions, MovementType } from "@/types/common/game/outcomes";
-import type { HexDimensions } from "@/types/client/tile";
+import type { Piece } from "@/types/common/game/piece";
+import type { GetMovementResult, GetPlacementResult, MovementOptions, MovementType } from "@/types/common/game/outcomes";
 
-import type { MoveAvailability } from "@/client/components/GameUI";
+import type { WithPremove } from "@/client/components/GameUI";
 
 import HexGrid from "@/common/game/hexGrid";
 import Notation from "@/client/utility/notation";
@@ -16,92 +16,69 @@ import ConvertCoords from "@/client/utility/convertCoords";
 
 import Placeholder from "@/client/components/Placeholder";
 import PieceTile, { PieceTileState } from "@/client/components/PieceTile";
-import TileContainer from "@/client/components/TileContainer";
+import ViewPort from "@/client/components/ViewPort";
 
-type GetMoveFn = (piece: Piece) => MoveAvailability;
+type GetMovementFn = (piece: Piece) => WithPremove<GetMovementResult>;
+type GetPlacementFn = (piece: Piece) => WithPremove<GetPlacementResult>;
 type DoMoveFn = (piece: Piece, destination: LatticeCoords) => void;
 
 export interface BoardProps {
-    // board layout
+    // game state
     piecePositions: PosToPiece;
-    currTurnColor: PieceColor;
+    turnCount: number;
+
+    // tile spacing
+    hexGap: number;
 
     // potential interactivity
     interactivity?: {
-        getMoves: GetMoveFn;
+        getMovements: GetMovementFn;
+        getPlacements: GetPlacementFn;
         attemptMove: DoMoveFn;
     };
 }
 
-interface BoardState {
-    from: LatticeCoords;
-    to: LatticeCoords;
-    moveType: MovementType;
+interface StateBase { pos: LatticeCoords; }
+
+interface CurrTile extends StateBase {
     pathMap: PathMap<LatticeCoords>;
-    placeholders: MovementOptions;
-    tileShake: LatticeCoords;
+    options: MovementOptions;
+}
+interface CurrPlaceholder extends StateBase {
+    type: MovementType;
+}
+interface ShakingTile extends StateBase {
+    parity: number;
 }
 
-// TODO make this into a setting
-const hexDims: HexDimensions = { cornerRad: 100 / 6, gap: 100 / 18 };
+const initTile: CurrTile = { options: {}, pathMap: () => [], pos: [NaN, NaN] };
+const initPlaceholder: CurrPlaceholder = { pos: [NaN, NaN], type: "Normal" };
+const initShaking: ShakingTile = { parity: 1, pos: [NaN, NaN] };
 
-export default class Board extends Component<BoardProps, BoardState> {
-    public constructor() {
-        super();
-        this.state = Board.initialState();
+export default function Board(props: BoardProps): h.JSX.Element {
+    const [currTile, setSelected] = useState<CurrTile>(initTile);
+    const [currPlaceholder, setHover] = useState<CurrPlaceholder>(initPlaceholder);
+    const [shaking, setShaking] = useState<ShakingTile>(initShaking);
+
+    useEffect(resetState, [props.turnCount]);
+
+    function resetState(): void {
+        setSelected(initTile);
+        setHover(initPlaceholder);
+        setShaking(initShaking);
     }
 
-    /**
-     * Detect when the turn has advanced & clear the selection.
-     * 
-     * @param previousProps previous component properties, including turn color
-     */
-    public override componentDidUpdate(previousProps: Readonly<BoardProps>): void {
-        if (previousProps.currTurnColor !== this.props.currTurnColor) {
-            this.resetState();
-        }
-    }
-
-    private static initialState(): BoardState {
-        return {
-            from: [NaN, NaN],
-            moveType: "Normal",
-            pathMap: () => [],
-            placeholders: {},
-            tileShake: [NaN, NaN],
-            to: [NaN, NaN]
-        };
-    }
-
-    private resetState(): void { this.setState(Board.initialState()); }
-
-    /**
-     * Update state to trigger addition of a class to specified piece tile which in
-     * turn causes it to shake. This is used to indicate an invalid tile selection.
-     * 
-     * @param pos position of tile to apply shake animation to
-     */
-    private shakeTile(pos: LatticeCoords): void {
-        this.setState(
-            { tileShake: [NaN, NaN] },
-            () => this.setState({ tileShake: pos })
-        );
-    }
-
-    private handlePlaceholderClick = (attemptMove: DoMoveFn, pos: LatticeCoords) => {
-        const { from } = this.state;
-        if (from) {
-            const piece = this.props.piecePositions[from.join(",")];
+    function handlePlaceholderClick(attemptMove: DoMoveFn, pos: LatticeCoords): void {
+        if (currTile.pos) {
+            const piece = props.piecePositions[currTile.pos.join(",")];
             if (piece) attemptMove(piece, pos);
             else {
                 // TODO should never be reachable; still, show error to user
                 console.error("Piece to move is no longer in its expected starting location.");
             }
-            this.resetState();
+            resetState();
         }
-    };
-    private handlePlaceholderHover = (pos: LatticeCoords, type: MovementType) =>
-        this.setState({ moveType: type, to: pos });
+    }
 
     /**
      * Render move path & tile for each active placeholder, as long as board is interactive.
@@ -109,44 +86,52 @@ export default class Board extends Component<BoardProps, BoardState> {
      * @param props props of this component, containing interactivity callbacks
      * @returns Fragment containing move path & child Tile for each placeholder on board
      */
-    private renderPlaceholdersAndPath(props: BoardProps): h.JSX.Element | undefined {
+    function renderPlaceholdersAndPath(props: BoardProps): h.JSX.Element | undefined {
         if (!props.interactivity) return;
-
-        const { to, pathMap, moveType: pathMapType } = this.state;
         const { attemptMove } = props.interactivity;
-        const movePath = "M" + [to].concat(pathMap(to))
-            .map(p => ConvertCoords.hexLatticeToSVG(hexDims.gap, ...p).join(","))
-            .join("L");
+
+        const { pos, type } = currPlaceholder;
+        const movePath = `M${[pos].concat(currTile.pathMap(pos))
+            .map(p => ConvertCoords.hexLatticeToSVG(props.hexGap, ...p).join(","))
+            .join("L")}`;
 
         return (
             <Fragment>
-                {HexGrid.entriesOfPosRecord(this.state.placeholders).map(([pos, type]) => (
-                    <Placeholder
-                        key={`${pos.join(",")}${type}`}
-                        pos={ConvertCoords.hexLatticeToSVG(hexDims.gap, ...pos)}
-                        handleClick={this.handlePlaceholderClick.bind(this, attemptMove, pos)}
-                        handleMouseEnter={this.handlePlaceholderHover.bind(this, pos, type)}
-                        type={type}
-                    />
-                ))}
-                <path class={`move-path ${pathMapType}`} d={movePath} />
+                {HexGrid.entriesOfPosRecord(currTile.options).map(([pos, type]) => {
+                    const handleClick = () => handlePlaceholderClick(attemptMove, pos);
+                    const handleMouseEnter = () => setHover({ pos, type });
+
+                    return (
+                        <Placeholder
+                            key={`${pos.join(",")}${type}`}
+                            pos={ConvertCoords.hexLatticeToSVG(props.hexGap, ...pos)}
+                            handleClick={handleClick}
+                            handleMouseEnter={handleMouseEnter}
+                            type={type}
+                        />
+                    );
+                })}
+                <path class={`move-path ${type}`} d={movePath} />
             </Fragment>
         );
     }
 
-    private handlePieceTileClick = (getMoves: GetMoveFn, piece: Piece, pos: LatticeCoords) => {
-        const { from } = this.state;
-        if (isNaN(from[0])) { // clicking unselected piece
-            const { outcome } = getMoves(piece); // TODO does not distinguish premoves
+    function handlePieceTileClick(piece: Piece, pos: LatticeCoords): void {
+        if (!props.interactivity) return;
+
+        if (isNaN(currTile.pos[0])) { // clicking unselected piece
+            const { outcome } = props.interactivity.getMovements(piece); // TODO does not distinguish premoves
+
             if (outcome.status === "Success") {
                 const { pathMap, options } = outcome;
-                this.setState({ from: pos, pathMap, placeholders: options, tileShake: [NaN, NaN] });
+                setSelected({ options, pathMap, pos });
+                setShaking(initShaking);
             } else {
-                this.shakeTile(pos);
+                setShaking((prev: ShakingTile) => ({ parity: -prev.parity, pos }));
                 console.error(`No legal moves; getMoves() returned message: ${outcome.message}`);
             }
-        } else if (HexGrid.eqPos(pos, from)) this.resetState();
-    };
+        } else if (HexGrid.eqPos(pos, currTile.pos)) resetState();
+    }
 
     /**
      * Render tiles for each of the current game pieces.
@@ -154,30 +139,28 @@ export default class Board extends Component<BoardProps, BoardState> {
      * @param props props of this component, containing current piece tile positions
      * @returns Fragment containing a child Tile for each piece tile on the board
      */
-    private renderPieceTiles(props: BoardProps): h.JSX.Element {
-        const { from, tileShake } = this.state;
+    function renderPieceTiles(props: BoardProps): h.JSX.Element {
         return (
             <Fragment>{
                 HexGrid.entriesOfPosRecord(props.piecePositions).map(([pos, piece]) => {
                     let state: PieceTileState = "Inactive";
                     if (props.interactivity) {
-                        if (HexGrid.eqPos(pos, tileShake)) state = "Shaking";
-                        else if (HexGrid.eqPos(pos, from)) state = "Selected";
-                        else if (isNaN(from[0])) state = "Normal";
+                        if (HexGrid.eqPos(pos, shaking.pos)) state = "Shaking";
+                        else if (isNaN(currTile.pos[0])) state = "Normal";
+                        else if (HexGrid.eqPos(pos, currTile.pos)) state = "Selected";
                     }
 
-                    // key changes for shaking tiles to force remount (needed to restart CSS animations)
+                    // key must change for shaking tiles to force remount & restart CSS animation
                     // see: https://css-tricks.com/restart-css-animation/
-                    const key = `${Notation.pieceToString(piece)}${state === "Shaking" ? "~" : ""}`;
-                    const handleClick = props.interactivity &&
-                        this.handlePieceTileClick.bind(this, props.interactivity.getMoves, piece, pos);
+                    const key = `${Notation.pieceToString(piece)}${state === "Shaking" ? shaking.parity : ""}`;
+                    const handleClick = () => handlePieceTileClick(piece, pos);
 
                     return (
                         <PieceTile
                             // TODO without key, all pieces transition at once, but with one nothing transitions
                             key={key}
                             piece={piece}
-                            pos={ConvertCoords.hexLatticeToSVG(hexDims.gap, ...pos)}
+                            pos={ConvertCoords.hexLatticeToSVG(props.hexGap, ...pos)}
                             handleClick={handleClick}
                             state={state}
                         />
@@ -187,16 +170,13 @@ export default class Board extends Component<BoardProps, BoardState> {
         );
     }
 
-    public override render(props: BoardProps): h.JSX.Element {
-        return (
-            <TileContainer
-                viewRange={5.3}
-                panAndZoom={true}
-                hexDims={hexDims}
-            >
-                {this.renderPieceTiles(props)}
-                {this.renderPlaceholdersAndPath(props)}
-            </TileContainer>
-        );
-    }
+    return (
+        <ViewPort
+            viewRange={5.3}
+            panAndZoom={true}
+        >
+            {renderPieceTiles(props)}
+            {renderPlaceholdersAndPath(props)}
+        </ViewPort>
+    );
 }

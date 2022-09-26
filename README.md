@@ -75,7 +75,7 @@ npm run tmux
 ```
 This will create a new ```tmux``` session named "```hive```" (or attach to it if it already exists), in which two panes are launched (or restarted if they already exist), each running one of the aforementioned scripts. The entire ```tmux``` session is automatically killed whenever either script exits. This way we ensure that both commands spawn, persist, and die together.
 
-We also pass an additional environment variable, ```autokill```, to Webpack, which is read by a custom Webpack plugin, which in turn sets the environment variable ```process.env.KILL_ON_DISCONNECT``` in the compiled webpage code. Having this environment variable set causes the game client to automatically kill the browser tab whenever the connection to the websocket server is dropped.
+We also pass an additional environment variable, ```AUTOKILL```, to Webpack, the value of which is read by a custom Webpack plugin and used to replace all occurrences of ```process.env.AUTOKILL``` in the compiled webpage code. The game client checks this value, and if it is defined will automatically kill the browser tab whenever the connection to the websocket server is dropped.
 
 This *almost* solves the issue of orphaned brower tabs. Firefox currently does not allow tabs which were not programmatically spawned to close themselves. Therefore, the browser tab which is automatically opened by Webpack will happily kill itself when needed, but to get the private browsing tab to close, we need to also programmatically spawn this tab.
 

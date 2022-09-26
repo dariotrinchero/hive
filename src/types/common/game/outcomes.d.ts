@@ -135,6 +135,7 @@ export interface GetMovementError extends MovementBase, ErrorBase {
 
 export type GetPlacementResult = GetPlacementSuccess | GetPlacementError;
 export type GetMovementResult = GetMovementSuccess | GetMovementError;
+export type GetMoveResult = GetPlacementResult | GetMovementResult;
 
 // adjacent pillbug mount lookup result types
 export interface GetPillbugError extends ErrorBase {

@@ -7,6 +7,7 @@ module.exports = {
     },
     plugins: [ "@typescript-eslint" ],
     extends: [
+        "preact",
         "eslint:recommended",
         "plugin:@typescript-eslint/recommended",
         "plugin:@typescript-eslint/recommended-requiring-type-checking"

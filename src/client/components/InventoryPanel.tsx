@@ -1,42 +1,36 @@
 import { h } from "preact";
 
 import type { Inventory, PieceColor, PieceType } from "@/types/common/game/piece";
-import type { HexDimensions } from "@/types/client/tile";
 
 import ConvertCoords from "@/client/utility/convertCoords";
 
-import TileContainer from "@/client/components/TileContainer";
-import PieceTile from "./PieceTile";
+import ViewPort from "@/client/components/ViewPort";
+import PieceTile from "@/client/components/PieceTile";
 
 export interface InventoryProps {
     playerColor: PieceColor;
     inventory: Inventory;
 }
 
-// TODO make this consistent with Board by passing from GameUI into both via props?
-const hexDims: HexDimensions = { cornerRad: 100 / 6, gap: 100 / 18 };
+const hexGap = 100 / 18;
 
 const handleTileClick = () => {
     return;
 };
 
-const InventoryPanel: (props: InventoryProps) => h.JSX.Element = props => {
+function InventoryPanel(props: InventoryProps): h.JSX.Element {
     return (
-        <TileContainer
-            hexDims={hexDims}
-            panAndZoom={false}
-            viewRange={3}
-        >
+        <ViewPort viewRange={3}>
             {Object.entries(props.inventory).map(([type, amount], index) => {
                 <PieceTile
                     handleClick={handleTileClick}
                     piece={{ color: props.playerColor, type: type as PieceType }}
-                    pos={ConvertCoords.hexLatticeToSVG(hexDims.gap, 0, index)}
+                    pos={ConvertCoords.hexLatticeToSVG(hexGap, 0, index)}
                     state={"Normal"}
                 />;
             })}
-        </TileContainer>
+        </ViewPort>
     );
-};
+}
 
 export default InventoryPanel;
