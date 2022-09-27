@@ -1,19 +1,18 @@
-import { Fragment, h } from "preact";
+import { createContext, h } from "preact";
 import { useRef, useState } from "preact/hooks";
 
 import HiveGame from "@/common/game/game";
 import GameClient from "@/client/utility/gameClient";
 
 import type { Piece, PieceColor } from "@/types/common/game/piece";
-import type { GetMoveResult } from "@/types/common/game/outcomes";
+import type { GetMoveResult, MoveType } from "@/types/common/game/outcomes";
 import type { GameState } from "@/types/common/socket";
 import type { PlayerColor } from "@/types/client/gameClient";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
 
 import Board, { BoardProps } from "@/client/components/Board";
 import Spinner from "@/client/components/Spinner";
-import InventoryPanel from "@/client/components/InventoryPanel";
-import TileDefs from "@/client/components/TileDefs";
+import HexDefs from "@/client/components/HexDefs";
 
 export interface WithPremove<T extends GetMoveResult> {
     outcome: T;
@@ -25,57 +24,49 @@ interface HexDimensions {
     hexGap: number;
 }
 
+const initHexDims: HexDimensions = { cornerRad: 100 / 6, hexGap: 100 / 18 };
+
+// TODO include other global settings in here
+export const UISettingContext = createContext<HexDimensions>(initHexDims);
+
 export default function GameUI() {
     // TODO it is wasteful to duplicate game state here & in HiveGame object, but maybe sensible for
     // clean separation of rendering & game logic? Is there a better pattern for this?
     const [gameState, setGameState] = useState<GameState>(HiveGame.initialState());
-    const [hexDims] = useState<HexDimensions>({ cornerRad: 100 / 6, hexGap: 100 / 18 });
+    const [gameStarted, setStarted] = useState(false);
+    const [hexDims] = useState<HexDimensions>(initHexDims);
 
-    const gameClient = useRef<GameClient>(new GameClient(state => setGameState(state)));
+    const gameClient = useRef<GameClient>(new GameClient(
+        (state, started) => {
+            setGameState(state);
+            setStarted(started);
+        }
+    ));
 
-    function addPremove<T extends GetMoveResult>(
-        getMove: (piece: Piece, colOverride: PieceColor) => T,
-        playerColor: PieceColor
-    ): (piece: Piece) => WithPremove<T> {
-        return (piece: Piece) => ({
-            outcome: getMove(piece, playerColor),
-            premove: playerColor !== gameState.currTurnColor
-        });
-    }
+    const attemptMove = (piece: Piece, destination: LatticeCoords, turnType: MoveType) =>
+        gameClient.current.queueMove({ destination, piece, turnType });
+    const getMoves = (colorOverride: PieceColor) => (piece: Piece, turnType: MoveType) => ({
+        outcome: gameClient.current.game.getMoves({ colorOverride, piece, turnType }),
+        premove: colorOverride !== gameState.currTurnColor
+    });
 
-    // TODO any better way of writing all this repetative junk?
-    const getMovements = (piece: Piece, colOverride: PieceColor) =>
-        gameClient.current.game.getMovements(piece, colOverride);
-    const getPlacements = (piece: Piece, colOverride: PieceColor) =>
-        gameClient.current.game.getPlacements(piece, colOverride);
-    const attemptMove = (piece: Piece, dest: LatticeCoords) =>
-        gameClient.current.queueMove(piece, dest);
-
-    function renderBoardArea(): h.JSX.Element {
+    function renderBoard(): h.JSX.Element {
         if (!gameStarted) return <Spinner />;
 
-        const boardCallbacks: BoardProps["interactivity"] = playerColor !== "Spectator"
+        const interactivity: BoardProps["interactivity"] = playerColor !== "Spectator"
             ? {
                 attemptMove,
-                getMovements: addPremove(getMovements, playerColor),
-                getPlacements: addPremove(getPlacements, playerColor)
+                getMoves: getMoves(playerColor),
+                inventory: gameClient.current.game.getInventory(playerColor),
+                playerColor
             } : undefined;
 
         return (
-            <Fragment>
-                <Board
-                    piecePositions={gameState.posToPiece}
-                    turnCount={gameState.turnCount}
-                    interactivity={boardCallbacks}
-                    hexGap={hexDims.hexGap}
-                />
-                {playerColor !== "Spectator" &&
-                    <InventoryPanel
-                        playerColor={playerColor}
-                        inventory={gameClient.current.game.getInventory(playerColor)}
-                    />
-                }
-            </Fragment>
+            <Board
+                piecePositions={gameState.posToPiece}
+                turnCount={gameState.turnCount}
+                interactivity={interactivity}
+            />
         );
     }
 
@@ -83,14 +74,15 @@ export default function GameUI() {
     // player color is set as soon as client connects, only Preact has not re-rendered by then;
     // improve this by having game / gameClient be aware of whether game is "pending"
     const playerColor: PlayerColor = gameClient.current.getPlayerColor();
-    const gameStarted: boolean = playerColor !== "Spectator";
 
     return (
-        <Fragment>
-            <h1>{gameStarted ? playerColor : "...waiting for opponent"}</h1>
-            <span>{playerColor === gameState.currTurnColor ? "Your turn" : <span>&nbsp;</span>}</span>
-            <TileDefs {...hexDims} onlyRoundedHex={!gameStarted} />
-            {renderBoardArea()}
-        </Fragment>
+        <UISettingContext.Provider value={hexDims}>
+            <header>
+                <h1>{gameStarted ? playerColor : "...waiting for opponent"}</h1>
+                <span>{playerColor === gameState.currTurnColor ? "Your turn" : <span>&nbsp;</span>}</span>
+            </header>
+            <HexDefs />
+            {renderBoard()}
+        </UISettingContext.Provider>
     );
 }

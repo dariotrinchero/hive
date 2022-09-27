@@ -1,37 +1,32 @@
 import type {
     ErrorBase,
-    MovementBase,
-    MovementResult,
     TurnAttempt,
-    TurnResult
+    TurnResult,
+    TurnType
 } from "@/types/common/game/outcomes";
-import type { Piece, PieceColor } from "@/types/common/game/piece";
+import type { PieceColor } from "@/types/common/game/piece";
 import type { LastMoveDestination } from "@/types/common/game/game";
-import type { LatticeCoords, PosToPiece } from "@/types/common/game/hexGrid";
+import type { PosToPiece } from "@/types/common/game/hexGrid";
 
 // turn request (client-server-related) error message types
-type TurnRequestErrorMsg = "ErrSpectator"
+export type TurnRequestErrorMsg = "ErrSpectator"
     | "ErrInvalidGameId"
     | "ErrNeedOpponentOnline"
     | "ErrOutOfTurn";
 
-export interface TurnRequestErrorBase extends ErrorBase {
+interface TurnRequestError extends ErrorBase {
+    turnType: TurnType | "Unknown";
     message: TurnRequestErrorMsg;
 }
-interface TurnRequestError extends TurnRequestErrorBase {
-    turnType: "Unknown";
-}
-type MovementRequestError = TurnRequestErrorBase & MovementBase;
+export type TurnRequestResult = TurnResult | TurnRequestError;
 
-export type TurnRequestOutcome = TurnResult | TurnRequestError;
-export type MovementRequestOutcome = MovementResult | MovementRequestError;
-
-// player session
+// client session
 export type ClientType = "Player" | "Spectator";
 
 interface SessionBase {
     sessionId: string;
     startingColor: PieceColor;
+    bothJoined: boolean; // whether both players have joined
     spectating: boolean;
 }
 
@@ -66,9 +61,8 @@ export interface ServerToClient extends ConnectionEvents {
 }
 
 export interface ClientToServer {
-    "turn request": (req: TurnAttempt, callback: (out: TurnRequestOutcome, hash: string) => void) => void;
     "game state request": (callback: (state: GameState) => void) => void;
-    "move request": (piece: Piece, dest: LatticeCoords, callback: (out: MovementRequestOutcome, hash: string) => void) => void;
+    "turn request": (req: TurnAttempt, callback: (out: TurnRequestResult, hash: string) => void) => void;
 }
 
 export interface InterServer {

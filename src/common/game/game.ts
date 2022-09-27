@@ -6,14 +6,16 @@ import type {
     CanMoveErrorMsg,
     CanPlaceErrorMsg,
     GetMovementResult,
+    GetMoveQuery,
+    GetMoveResult,
     GetPillbugError,
     GetPillbugResult,
     GetPlacementResult,
     MovementError,
     MovementErrorMsg,
-    MovementOptions,
     MovementResult,
     MovementType,
+    MoveOptions,
     PassError,
     PassResult,
     PlacementError,
@@ -22,7 +24,7 @@ import type {
     TurnAttempt,
     TurnResult
 } from "@/types/common/game/outcomes";
-import type { Inventory, Piece, PieceColor, PieceType } from "@/types/common/game/piece";
+import type { Piece, PieceColor, PieceCount, PieceType } from "@/types/common/game/piece";
 import type { GameState } from "@/types/common/socket";
 import type {
     GameStatus,
@@ -69,6 +71,10 @@ export default class HiveGame extends HexGrid {
         this.gameStatus = "Ongoing";
         this.noFirstQueen = noFirstQueen || false;
     }
+
+    // ===================================================================================================
+    //  Public-facing API functions
+    // ===================================================================================================
 
     public static initialState(colorToStart?: PieceColor): GameState {
         return {
@@ -118,13 +124,75 @@ export default class HiveGame extends HexGrid {
 
     public getTurnCount(): number { return this.turnCount; }
 
-    public getInventory(color: PieceColor): Inventory { return this.playerInventories[color]; }
+    public getInventory(color: PieceColor): PieceCount { return this.playerInventories[color]; }
 
     public setNoFirstQueen(nfq: boolean): void { this.noFirstQueen = nfq; }
 
     public setColorToStart(color: PieceColor): void {
         if (this.turnCount === 0) this.currTurnColor = color;
     }
+
+    /**
+     * Process given turn request & perform appropriate actions.
+     * 
+     * @param turn object encoding details of turn request
+     * @returns discriminated union indicating attempted turn action with details of success or failure
+     */
+    public processTurn(turn: TurnAttempt): TurnResult {
+        // handle specific turn attempt
+        if ("turnType" in turn) {
+            if (turn.turnType === "Pass") return this.passTurn();
+            else if (turn.turnType === "Movement") return this.movePiece(turn.piece, turn.destination);
+            return this.placePiece(turn.piece, turn.destination);
+        }
+
+        // handle generic turn attempt
+        const pieceIsOnBoard = this.getPosOf(turn.piece);
+
+        // throw error on invalid destination
+        const pos = this.relToAbs(turn.destination);
+        if (!pos) return {
+            message: "ErrInvalidDestination",
+            status: "Error",
+            turnType: pieceIsOnBoard ? "Movement" : "Placement"
+        };
+
+        if (pieceIsOnBoard) return this.movePiece(turn.piece, pos);
+        return this.placePiece(turn.piece, pos);
+    }
+
+    /**
+     * Get all possible legal moves of specified type ("Movement" / "Placement") for given piece.
+     * 
+     * @param query details of piece and move type
+     * @returns discriminated union containing either valid move locations or error details
+     */
+    public getMoves(query: GetMoveQuery): GetMoveResult {
+        if (query.turnType === "Movement") return this.getMovements(query.piece, query.colorOverride);
+        return this.getPlacements(query.piece, query.colorOverride);
+    }
+
+    /**
+     * Check whether game has ended, and if so in what outcome.
+     * 
+     * @returns whether game is ongoing; otherwise outcome of game
+     */
+    public checkGameStatus(): GameStatus {
+        const blackBeePos = this.getPosOf({ color: "Black", index: 1, type: "QueenBee" });
+        const whiteBeePos = this.getPosOf({ color: "White", index: 1, type: "QueenBee" });
+        if (!blackBeePos || !whiteBeePos) return "Ongoing";
+
+        const blackSurrounded: boolean = this.adjPieceCoords(blackBeePos).length === 6;
+        const whiteSurrounded: boolean = this.adjPieceCoords(whiteBeePos).length === 6;
+        if (blackSurrounded && whiteSurrounded) return "Draw";
+        if (blackSurrounded) return "WhiteWin";
+        if (whiteSurrounded) return "BlackWin";
+        return "Ongoing";
+    }
+
+    // ===================================================================================================
+    //  Internal helper functions
+    // ===================================================================================================
 
     /**
      * Advance current turn, check for game-ending conditions & record last move; also invalidate 
@@ -184,14 +252,14 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
-     * Outward-facing API function to get all possible placement locations for given piece, or
-     * alternatively an error if placing given piece this turn is illegal.
+     * Get all possible placement locations for given piece, or error if placing given piece this
+     * turn is illegal.
      * 
      * @param piece piece to find valid placement locations for
      * @param colorOverride overrides current color to move (used for premoves)
      * @returns discriminated union containing either valid placement locations or error details
      */
-    public getPlacements(piece: Piece, colorOverride?: PieceColor): GetPlacementResult {
+    private getPlacements(piece: Piece, colorOverride?: PieceColor): GetPlacementResult {
         // check that placement is legal
         const mayBePlaced = this.pieceMayBePlaced(piece, colorOverride);
         if (mayBePlaced !== "Success") return {
@@ -201,21 +269,24 @@ export default class HiveGame extends HexGrid {
         };
 
         // get valid placement spots
-        let options: LatticeCoords[] = [[0, 0]];
-        if (this.turnCount === 1) options = this.adjCoords([0, 0]);
-        else options = Object.values(this.getAllPosOf(piece.color))
+        let options: MoveOptions;
+        if (this.turnCount === 0) options = { "0,0": "Normal" };
+        else if (this.turnCount === 1) options = Object.fromEntries(this.adjCoords([0, 0])
+            .map(pos => [pos.join(","), "Normal"]));
+        else options = Object.fromEntries(Object.values(this.getAllPosOf(piece.color))
             .flat()
             .flatMap(pos => this.adjCoords(pos))
             .filter(pos => !this.getPieceAt(pos)
-                && this.adjPieces(pos).every(p => p.color === piece.color));
+                && this.adjPieces(pos).every(p => p.color === piece.color))
+            .map(pos => [pos.join(","), "Normal"]));
 
-        if (!options.length) return {
-            message: "ErrNoValidPlacementTargets",
-            status: "Error",
-            turnType: "Placement"
-        };
-
-        return { options, status: "Success", turnType: "Placement" };
+        return Object.keys(options).length
+            ? { options, status: "Success", turnType: "Placement" }
+            : {
+                message: "ErrNoValidPlacementTargets",
+                status: "Error",
+                turnType: "Placement"
+            };
     }
 
     /**
@@ -246,13 +317,13 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
-     * Outward-facing API function to attempt to place given piece at given location.
+     * Attempt to place given piece at given location.
      * 
      * @param piece piece to place
      * @param destination position at which to place
      * @returns discriminated union indicating success or failure with details in each case
      */
-    public placePiece(piece: Piece, destination: LatticeCoords): PlacementResult {
+    private placePiece(piece: Piece, destination: LatticeCoords): PlacementResult {
         const err: Pick<PlacementError, "status" | "turnType"> = {
             status: "Error",
             turnType: "Placement"
@@ -506,15 +577,15 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
-     * Outward-facing API function to get all possible destinations to which given piece can legally move,
-     * both normally and (potentially) using a pillbug special ability. Returns valid moves in form of a
-     * map from position to move type ("Normal" / "Pillbug"), encoding positions in comma-delimited strings.
+     * Get all possible destinations to which given piece can legally move, normally or (potentially) using
+     * pillbug special ability. Returns valid moves in a map from position to move type ("Normal" / "Pillbug"),
+     * encoding positions in comma-delimited strings.
      * 
      * @param piece piece which is to move
      * @param colorOverride overrides current color to move (used for premoves)
      * @returns discriminated union containing either valid movement destinations or details of error
      */
-    public getMovements(piece: Piece, colorOverride?: PieceColor): GetMovementResult {
+    private getMovements(piece: Piece, colorOverride?: PieceColor): GetMovementResult {
         // check that piece can move at all
         const mayMove = this.pieceMayMove(piece, undefined, colorOverride);
         if (mayMove !== "Success" && mayMove !== "PillbugOnly") return {
@@ -525,7 +596,7 @@ export default class HiveGame extends HexGrid {
 
         // collect all legal moves (de-duplicating & prefering normal moves to pillbug ones)
         const pathMaps: PathMap<LatticeCoords>[] = [];
-        const options: MovementOptions = {};
+        const options: MoveOptions = {};
         const collectMoves = (movementType: MovementType) => {
             const generator = movementType === "Pillbug"
                 ? this.genPillbugMoves(piece, undefined, colorOverride)
@@ -543,7 +614,7 @@ export default class HiveGame extends HexGrid {
         collectMoves("Pillbug");
 
         // throw error if no legal moves are found
-        return Object.values(options).length
+        return Object.keys(options).length
             ? {
                 options,
                 pathMap: GraphUtils.mergePaths(...pathMaps),
@@ -591,13 +662,13 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
-     * Outward-facing API function to attempt to move given piece to given destination.
+     * Attempt to move given piece to given destination.
      * 
      * @param piece piece to move
      * @param destination destination to which to move piece
      * @returns discriminated union indicating success or failure with details in each case
      */
-    public movePiece(piece: Piece, destination: LatticeCoords): MovementResult {
+    private movePiece(piece: Piece, destination: LatticeCoords): MovementResult {
         const err: Pick<MovementError, "status" | "turnType"> = {
             status: "Error",
             turnType: "Movement"
@@ -622,12 +693,12 @@ export default class HiveGame extends HexGrid {
     }
 
     /**
-     * Outward-facing API function to aass current turn without action. This is only a valid action when
-     * no legal moves remain (see https://boardgamegeek.com/wiki/page/Hive_FAQ#toc7).
+     * Pass current turn without action. This is only a valid action when no legal moves remain
+     * (see https://boardgamegeek.com/wiki/page/Hive_FAQ#toc7).
      * 
      * @returns discriminated union indicating pass action with details of success or failure
      */
-    public passTurn(): PassResult {
+    private passTurn(): PassResult {
         const err: Pick<PassError, "status" | "message" | "turnType"> = {
             message: "ErrValidMovesRemain",
             status: "Error",
@@ -637,11 +708,13 @@ export default class HiveGame extends HexGrid {
         // check for any legal moves using placement
         for (const [type, num] of Object.entries(this.playerInventories[this.currTurnColor])) {
             if (!num) continue;
-
             const piece: Piece = { color: this.currTurnColor, type: type as PieceType };
+
+            // TODO there are similarities between this and the analogous part below:
             const outcome = this.getPlacements(piece);
             if (outcome.status !== "Error") {
-                const destination = this.absToRel(outcome.options[0]);
+                const option = HiveGame.entriesOfPosRecord(outcome.options)[0][0];
+                const destination = this.absToRel(option);
                 if (destination) return { ...err, exampleMove: { destination, piece } };
             }
         }
@@ -666,46 +739,5 @@ export default class HiveGame extends HexGrid {
 
         this.advanceTurn();
         return { status: "Success", turnType: "Pass" };
-    }
-
-    /**
-     * Outward-facing API function to process given generic turn request (pass, placement, or movement)
-     * and perform the appropriate actions.
-     * 
-     * @param turn object encoding details of turn request
-     * @returns discriminated union indicating attempted turn action with details of success or failure
-     */
-    public processTurn(turn: TurnAttempt): TurnResult {
-        if (turn === "Pass") return this.passTurn();
-        const pieceIsOnBoard = this.getPosOf(turn.piece);
-
-        // throw error on invalid destination
-        const pos = this.relToAbs(turn.destination);
-        if (!pos) return {
-            message: "ErrInvalidDestination",
-            status: "Error",
-            turnType: pieceIsOnBoard ? "Movement" : "Placement"
-        };
-
-        if (pieceIsOnBoard) return this.movePiece(turn.piece, pos);
-        return this.placePiece(turn.piece, pos);
-    }
-
-    /**
-     * Check whether game has ended, and if so in what outcome.
-     * 
-     * @returns whether game is ongoing; otherwise outcome of game
-     */
-    public checkGameStatus(): GameStatus {
-        const blackBeePos = this.getPosOf({ color: "Black", index: 1, type: "QueenBee" });
-        const whiteBeePos = this.getPosOf({ color: "White", index: 1, type: "QueenBee" });
-        if (!blackBeePos || !whiteBeePos) return "Ongoing";
-
-        const blackSurrounded: boolean = this.adjPieceCoords(blackBeePos).length === 6;
-        const whiteSurrounded: boolean = this.adjPieceCoords(whiteBeePos).length === 6;
-        if (blackSurrounded && whiteSurrounded) return "Draw";
-        if (blackSurrounded) return "WhiteWin";
-        if (whiteSurrounded) return "BlackWin";
-        return "Ongoing";
     }
 }

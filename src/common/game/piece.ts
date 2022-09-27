@@ -1,4 +1,4 @@
-import type { Inventory, PieceColor } from "@/types/common/game/piece";
+import type { PieceColor, PieceCount } from "@/types/common/game/piece";
 
 export enum Colors {
     Black,
@@ -16,7 +16,7 @@ export enum Bugs {
     Spider
 }
 
-export const pieceInventory: Inventory = {
+export const pieceInventory: PieceCount = {
     Ant: 3,
     Beetle: 2,
     Grasshopper: 3,

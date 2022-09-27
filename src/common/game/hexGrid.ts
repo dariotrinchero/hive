@@ -31,7 +31,7 @@ export default abstract class HexGrid {
         return pos1[0] === pos2[0] && pos1[1] === pos2[1];
     }
 
-    protected static eqPiece(piece1: Piece, piece2: Piece): boolean {
+    public static eqPiece(piece1: Piece, piece2: Piece): boolean {
         return piece1.color === piece2.color
             && piece1.type === piece2.type
             && piece1.index === piece2.index;

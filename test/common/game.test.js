@@ -4,14 +4,14 @@ const { default: Notation } = require("@/client/utility/notation");
 let game = null;
 
 const forceMove = (notation) => {
-    turn = Notation.stringToTurnRequest(notation);
+    turn = Notation.stringToTurnAttempt(notation);
     return game.movePiece(turn.piece, game.relToAbs(turn.destination));
 };
 
 function processTurns() { // ordinary function so 'arguments' is defined
     let result;
     for (const notation of arguments) {
-        result = game.processTurn(Notation.stringToTurnRequest(notation));
+        result = game.processTurn(Notation.stringToTurnAttempt(notation));
     }
     return result;
 }
@@ -291,7 +291,11 @@ describe("When piece is moved", () => {
     // places or passes instead of moving
     // TODO test for other PillbugMovementErrorMsg outcomes
     // TODO test how pillbug interacts with unplayed queen
+
     // TODO can mosquito steal movement of beetle from adjacent mounted mosquito?
+    // Seems no: https://boardgamegeek.com/thread/1857720/mosquito-next-mosquito-top-hive
+    // We are therefore already handling mosquito-on-moquito action correctly.
+
     // TODO test that special moves of adjacent pillbug + mosquito combine
 });
 

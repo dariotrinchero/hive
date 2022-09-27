@@ -4,7 +4,7 @@ export type PieceColor = keyof typeof Colors;
 
 export type PieceType = keyof typeof Bugs;
 
-export type Inventory = Record<PieceType, number>;
+export type PieceCount = Record<PieceType, number>;
 
 export interface Piece {
     type: PieceType;

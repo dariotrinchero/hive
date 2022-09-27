@@ -5,8 +5,7 @@ import ConvertCoords, { SVGCoords } from "@/client/utility/convertCoords";
 
 export interface ViewPortProps {
     panAndZoom?: boolean;
-    viewRange: number; // unzoomed, measured in hexagon radii
-
+    viewRange: [number, number]; // unzoomed, measured in hexagon radii
     children?: ComponentChildren;
 }
 
@@ -21,8 +20,8 @@ export default function ViewPort(props: ViewPortProps): h.JSX.Element {
     const [dragStart, setDragStart] = useState<SVGCoords>([NaN, NaN]);
     const [transform, setTransform] = useState<Transform>({
         pan: [ // hex radius is globally fixed to 100
-            -100 * props.viewRange,
-            -100 * (props.viewRange - 0.5)
+            -100 * props.viewRange[0],
+            -100 * (props.viewRange[1] - 0.5)
         ],
         zoom: 1
     });
@@ -83,7 +82,7 @@ export default function ViewPort(props: ViewPortProps): h.JSX.Element {
     const handleMouseUp = getHandler(() => [NaN, NaN], 1);
     const handleMouseLeave = getHandler(() => [NaN, NaN]);
 
-    const vbSize = 200 * props.viewRange / transform.zoom;
+    const vbSize = props.viewRange.map(r => 200 * r / transform.zoom);
     const handlers = props.panAndZoom ? {
         onMouseDown: handleMouseDown,
         onMouseLeave: handleMouseLeave,
@@ -96,7 +95,7 @@ export default function ViewPort(props: ViewPortProps): h.JSX.Element {
         <svg
             width="100%"
             height="100%"
-            viewBox={[...transform.pan, vbSize, vbSize].join(" ")}
+            viewBox={[...transform.pan, ...vbSize].join(" ")}
             ref={svgRef}
             {...handlers}
         >

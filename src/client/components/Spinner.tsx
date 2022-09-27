@@ -9,13 +9,13 @@ import ViewPort from "@/client/components/ViewPort";
 const hexGap = 100 / 18;
 
 const shift = ConvertCoords.hexLatticeToSVG(hexGap, 1, 0);
-const pivot = ConvertCoords.hexLatticeToSVG(hexGap, -2, 1).map(c => c / 3);
+const pivot = ConvertCoords.hexLatticeToSVG(hexGap, -2 / 3, 1 / 3);
 const style = `translate: ${shift.join("px ")}px;`
     + `transform-origin: ${pivot.join("px ")}px`;
 
 function Spinner(): h.JSX.Element {
     return (
-        <ViewPort viewRange={8}>
+        <ViewPort viewRange={[8, 8]}>
             <g class="spinner">
                 <use xlinkHref="#rounded-hex" />
                 <use

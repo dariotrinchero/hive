@@ -1,9 +1,12 @@
+@use "sass:map";
+@use "sass:color";
+
 $bug-colors: (
     Ant: hsl(199, 88%, 50%),
     Beetle: hsl(253, 31%, 60%),
     Grasshopper: hsl(126, 60%, 46%),
     Ladybug: hsl(356, 69%, 50%),
-    Mosquito: hsl(0, 0%, 65%),
+    Mosquito: hsl(0, 0%, 63%),
     Pillbug: hsl(164, 41%, 48%),
     QueenBee: hsl(38, 97%, 60%),
     Spider: hsl(28, 56%, 40%)
@@ -19,10 +22,10 @@ $bug-colors: (
 
 $tile-colors: (
     "Black": hsl(40, 6%, 20%),
-    "White": hsl(40, 47%, 91%)
+    "White": hsl(40, 47%, 89%)
 );
 
-.tile {
+g.tile {
     transition: translate 150ms ease-in-out 0s;
 
     @each $player-color, $color in $tile-colors {
@@ -44,6 +47,30 @@ $tile-colors: (
 
     &.Shaking {
         animation: 110ms ease-in-out 0s 3 normal none running tileshake;
+    }
+}
+
+#info-badge {
+    stroke-width: 0;
+
+    text {
+        text-anchor: middle;
+        font-size: 20px;
+        font-family: Arial, Helvetica, sans-serif;
+        font-weight: bold;
+    }
+
+    @each $player-color, $color in $tile-colors {
+        &.#{$player-color} {
+            circle {
+                fill: color.adjust(map.get($tile-colors,
+                            if($player-color == "White", "Black", "White")), $alpha: -0.35);
+            }
+
+            text {
+                fill: $color;
+            }
+        }
     }
 }
 

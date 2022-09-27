@@ -1,50 +1,50 @@
-import type { Piece, PieceType } from "@/types/common/game/piece";
+import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
 import type { LatticeCoords, RelativePosition } from "@/types/common/game/hexGrid";
 import type { PathMap } from "@/types/common/game/graph";
 
 export type MoveType = "Placement" | "Movement";
 export type MovementType = "Normal" | "Pillbug";
 export type TurnType = "Pass" | MoveType;
-export type ResultStatus = "Success" | "Error";
+type ResultStatus = "Success" | "Error";
 
-// general turn type base interfaces
+// turn type base interfaces
 interface TurnBase { turnType: TurnType; }
 interface MoveBase extends TurnBase { turnType: MoveType; }
-export interface PassBase extends TurnBase { turnType: "Pass"; }
-export interface PlacementBase extends MoveBase { turnType: "Placement"; }
-export interface MovementBase extends MoveBase { turnType: "Movement"; }
+interface PassBase extends TurnBase { turnType: "Pass"; }
+interface PlacementBase extends MoveBase { turnType: "Placement"; }
+interface MovementBase extends MoveBase { turnType: "Movement"; }
 
-// general result base interfaces
+// result base interfaces
 interface ResultBase { status: ResultStatus; }
-export interface SuccessBase extends ResultBase { status: "Success"; }
+interface SuccessBase extends ResultBase { status: "Success"; }
 export interface ErrorBase extends ResultBase {
     status: "Error";
     message: string;
 }
 
-// more specific base interfaces
-interface MoveSuccessBase extends MoveBase, SuccessBase {
+// move specification base interface
+interface MoveSpecification<Coordinates extends LatticeCoords | RelativePosition> {
     piece: Piece;
-    destination: LatticeCoords;
+    destination: Coordinates;
 }
+
+// success base interfaces
+type MoveSuccessBase = MoveBase & SuccessBase & MoveSpecification<LatticeCoords>;
 
 interface GetSuccessBase<T> extends SuccessBase {
     options: T;
 }
 
 // turn attempt types
-interface MoveAttempt {
-    // no turnType: game logic determines whether attempt is movement / placement
-    piece: Piece;
-    destination: RelativePosition;
-}
-export type TurnAttempt = "Pass" | MoveAttempt;
+export type GenericTurnAttempt = PassBase | MoveSpecification<RelativePosition>; // turnType must be inferred
+export type SpecificTurnAttempt = PassBase | MoveBase & MoveSpecification<LatticeCoords>;
+export type TurnAttempt = GenericTurnAttempt | SpecificTurnAttempt;
 
 // turn attempt / lookup error message types
 type PassErrorMsg =
     | "ErrValidMovesRemain";
 
-export type GetPillbugErrorMsg =
+type GetPillbugErrorMsg =
     | "ErrNoPillbugTouching"
     | "ErrPillbugMovedLastTurn"
     | "ErrPillbugCannotTargetStack"
@@ -74,11 +74,11 @@ export type CanMoveErrorMsg =
     | "ErrCovered"
     | "ErrPieceMovedLastTurn";
 
-export type GetPlacementErrorMsg =
+type GetPlacementErrorMsg =
     | CanPlaceErrorMsg
     | "ErrNoValidPlacementTargets";
 
-export type GetMovementErrorMsg =
+type GetMovementErrorMsg =
     | CanMoveErrorMsg
     | "ErrNoValidMoveDestinations";
 
@@ -104,7 +104,7 @@ type MovementSuccess = MovementBase & MoveSuccessBase & {
 
 export interface PassError extends PassBase, ErrorBase {
     message: PassErrorMsg;
-    exampleMove: MoveAttempt;
+    exampleMove: MoveSpecification<RelativePosition>;
 }
 export interface PlacementError extends PlacementBase, ErrorBase {
     message: PlacementErrorMsg;
@@ -115,21 +115,28 @@ export interface MovementError extends MovementBase, ErrorBase {
 
 export type PlacementResult = PlacementSuccess | PlacementError;
 export type MovementResult = MovementSuccess | MovementError;
+export type MoveResult = PlacementResult | MovementResult;
 export type PassResult = PassSuccess | PassError;
-export type TurnResult = PassResult | PlacementResult | MovementResult;
+export type TurnResult = PassResult | MoveResult;
+
+// legal move lookup query types
+export interface GetMoveQuery extends MoveBase {
+    piece: Piece;
+    colorOverride?: PieceColor;
+}
 
 // legal move lookup result types
-type GetPlacementSuccess = PlacementBase & GetSuccessBase<LatticeCoords[]>;
+export type MoveOptions = { [pos: string]: MovementType; };
 
-export type MovementOptions = { [pos: string]: MovementType; };
-interface GetMovementSuccess extends MovementBase, GetSuccessBase<MovementOptions> {
+type GetPlacementSuccess = PlacementBase & GetSuccessBase<MoveOptions>;
+interface GetMovementSuccess extends MovementBase, GetSuccessBase<MoveOptions> {
     pathMap: PathMap<LatticeCoords>;
 }
 
-export interface GetPlacementError extends PlacementBase, ErrorBase {
+interface GetPlacementError extends PlacementBase, ErrorBase {
     message: GetPlacementErrorMsg;
 }
-export interface GetMovementError extends MovementBase, ErrorBase {
+interface GetMovementError extends MovementBase, ErrorBase {
     message: GetMovementErrorMsg;
 }
 

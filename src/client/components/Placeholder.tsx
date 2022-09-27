@@ -7,7 +7,7 @@ import type { MovementType } from "@/types/common/game/outcomes";
 
 export interface PlaceholderProps extends BaseTileProps {
     type: MovementType;
-    handleMouseEnter: () => void;
+    handleMouseEnter?: () => void;
 }
 
 const mouseDown = (e: MouseEvent) =>

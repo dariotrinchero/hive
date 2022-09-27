@@ -8,16 +8,13 @@ import { invertColor } from "@/common/game/piece";
 import HiveGame from "@/common/game/game";
 import Routes from "@/server/session/routes";
 
-import type { TurnResult } from "@/types/common/game/outcomes";
 import type { PieceColor } from "@/types/common/game/piece";
 import type {
     ClientToServer,
     InterServer,
-    MovementRequestOutcome,
     ServerToClient,
     SocketData,
-    TurnRequestErrorBase,
-    TurnRequestOutcome
+    TurnRequestErrorMsg
 } from "@/types/common/socket";
 import type {
     ActiveGames,
@@ -98,9 +95,11 @@ export default class GameServer {
             socket.disconnect();
             return;
         }
+        gameDetails.online[clientType][sessionId] = true;
 
         // send new client their session details
-        const common = { sessionId, startingColor: gameDetails.startingColor };
+        const bothJoined = Object.keys(gameDetails.online.Player).length > 1;
+        const common = { bothJoined, sessionId, startingColor: gameDetails.startingColor };
         if (clientType === "Spectator") socket.emit("session", { ...common, spectating: true });
         else socket.emit("session", {
             ...common,
@@ -113,53 +112,11 @@ export default class GameServer {
         console.log(`${clientType} ${sessionId} connected`);
         void socket.join(gameId);
         socket.to(gameId).emit(`${clientType} connected`);
-        gameDetails.online[clientType][sessionId] = true;
 
         // send current game state to new client
         if (gameDetails.game.getTurnCount() > 0) {
             const state = gameDetails.game.getState();
             socket.emit("game state", state, sum(state));
-        }
-    }
-
-    private checkClientForTurn<T extends TurnRequestErrorBase>(
-        clientDetails: ClientDetails,
-        errTemplate: T,
-        oldHash: string,
-        callback: (out: T, hash: string) => void
-    ): boolean {
-        const { clientType, gameDetails: { online, game }, gameId } = clientDetails;
-
-        if (!this.activeGames[gameId]) {
-            // ensure valid game ID
-            callback(errTemplate, "");
-        } else if (clientType === "Spectator") {
-            // reject spectator moves
-            callback({ ...errTemplate, message: "ErrSpectator" }, oldHash);
-        } else if (clientDetails.color !== game.getCurrTurnColor()) {
-            // reject if out-of-turn
-            callback({ ...errTemplate, message: "ErrOutOfTurn" }, oldHash);
-        } else {
-            const onlineFlags = Object.values(online.Player);
-            if (game.getTurnCount() === 0 && !(onlineFlags[0] && onlineFlags[1])) {
-                // require both players to be online for first move
-                callback({ ...errTemplate, message: "ErrNeedOpponentOnline" }, oldHash);
-            } else return true;
-        }
-
-        return false;
-    }
-
-    private handleTurnOutcome<T extends TurnResult>(
-        clientDetails: ClientDetails,
-        outcome: T,
-        callback: (out: T, hash: string) => void
-    ) {
-        const { gameDetails: { game }, gameId, socket } = clientDetails;
-        const newHash = sum(game.getState());
-        callback(outcome, newHash);
-        if (outcome.status === "Success") {
-            socket.broadcast.to(gameId).emit("player turn", outcome, newHash);
         }
     }
 
@@ -177,25 +134,30 @@ export default class GameServer {
         });
 
         socket.on("turn request", (req, callback) => {
-            const err: TurnRequestOutcome = {
-                message: "ErrInvalidGameId",
-                status: "Error",
-                turnType: "Unknown"
-            };
-            if (this.checkClientForTurn(clientDetails, err, sum(gameDetails.game.getState()), callback)) {
-                this.handleTurnOutcome(clientDetails, gameDetails.game.processTurn(req), callback);
-            }
-        });
+            let msg: TurnRequestErrorMsg | undefined;
+            const oldHash = sum(gameDetails.game.getState());
 
-        socket.on("move request", (piece, destination, callback) => {
-            const err: MovementRequestOutcome = {
-                message: "ErrInvalidGameId",
-                status: "Error",
-                turnType: "Movement"
-            };
-            if (this.checkClientForTurn(clientDetails, err, sum(gameDetails.game.getState()), callback)) {
-                this.handleTurnOutcome(clientDetails, gameDetails.game.movePiece(piece, destination), callback);
+            // reject if client may not take turn
+            if (!this.activeGames[gameId]) msg = "ErrInvalidGameId";
+            else if (clientType === "Spectator") msg = "ErrSpectator";
+            else if (clientDetails.color !== gameDetails.game.getCurrTurnColor()) msg = "ErrOutOfTurn";
+            else {
+                const bothOnline = Object.values(gameDetails.online.Player).every(p => p);
+                if (gameDetails.game.getTurnCount() === 0 && !bothOnline) {
+                    msg = "ErrNeedOpponentOnline"; // require both players online for first move
+                }
             }
+
+            if (!msg) {
+                // attempt to take turn
+                const outcome = gameDetails.game.processTurn(req);
+                const newHash = sum(gameDetails.game.getState());
+
+                callback(outcome, newHash);
+                if (outcome.status === "Success") {
+                    socket.broadcast.to(gameId).emit("player turn", outcome, newHash);
+                }
+            } else callback({ message: msg, status: "Error", turnType: "Unknown" }, oldHash);
         });
 
         socket.on("game state request", callback => {

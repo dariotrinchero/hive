@@ -1,7 +1,7 @@
 import { Bugs, Colors, pieceInventory } from "@/common/game/piece";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
-import type { TurnAttempt } from "@/types/common/game/outcomes";
+import type { GenericTurnAttempt } from "@/types/common/game/outcomes";
 import type { Direction } from "@/types/common/game/hexGrid";
 
 export type ParseError = "ParseError";
@@ -46,9 +46,9 @@ export default class Notation {
         return prefix;
     }
 
-    public static stringToTurnRequest(notation: string): TurnAttempt | ParseError {
+    public static stringToTurnAttempt(notation: string): GenericTurnAttempt | ParseError {
         // special pass move
-        if (notation.toLowerCase() === "pass") return "Pass";
+        if (notation.toLowerCase() === "pass") return { turnType: "Pass" };
 
         // get moving piece
         const split: string[] = notation.split(" ");
@@ -80,8 +80,8 @@ export default class Notation {
         };
     }
 
-    public static turnRequestToString(turn: TurnAttempt): string {
-        if (turn === "Pass") return "pass";
+    public static turnAttemptToString(turn: GenericTurnAttempt): string {
+        if ("turnType" in turn) return "pass";
         let destination = ".";
         if (turn.destination !== "Anywhere") {
             destination = Notation.pieceToString(turn.destination.referencePiece);

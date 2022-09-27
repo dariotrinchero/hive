@@ -1,4 +1,4 @@
-import type { Inventory, PieceColor } from "@/types/common/game/piece";
+import type { PieceColor, PieceCount } from "@/types/common/game/piece";
 import type { LatticeCoords } from "@/types/common/game/hexGrid";
 import type { PathMap } from "@/types/common/game/graph";
 
@@ -6,7 +6,7 @@ import type { PathMap } from "@/types/common/game/graph";
 export type LastMoveDestination = Record<PieceColor, LatticeCoords | null>;
 
 // trackers inferable from game state
-export type PlayerInventories = Record<PieceColor, Inventory>;
+export type PlayerInventories = Record<PieceColor, PieceCount>;
 export type PlacementCount = Record<PieceColor, number>;
 export type GameStatus = "Ongoing" | `${PieceColor}Win` | "Draw";
 
