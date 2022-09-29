@@ -1,6 +1,10 @@
 const path = require('path');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
+
 const nodeExternals = require('webpack-node-externals');
+
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
 const { DefinePlugin } = require("webpack");
 
 module.exports = (env, args) => {
@@ -11,7 +15,10 @@ module.exports = (env, args) => {
     const common = {
         mode: args.mode, // "development" | "production"
         devtool: inProd() ? undefined : 'inline-source-map',
-        optimization: { usedExports: true },
+        optimization: {
+            usedExports: true,
+            minimizer: [ `...`, new CssMinimizerPlugin() ]
+        },
         resolve: {
             alias: { '@': path.resolve(__dirname, 'src') },
             extensions: [ '.tsx', '.ts', '.js', '.d.ts', '.scss' ],
@@ -25,7 +32,7 @@ module.exports = (env, args) => {
                 },
                 {
                     test: /\.(s(a|c)ss)$/,
-                    use: [ 'style-loader', 'css-loader', 'sass-loader' ]
+                    use: [ MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader' ]
                 }
             ],
         },
@@ -88,6 +95,7 @@ module.exports = (env, args) => {
                     inject: true,
                     template: path.resolve(__dirname, 'index.html'),
                 }),
+                new MiniCssExtractPlugin(),
                 ...injectEnv
             ],
             ...common,
