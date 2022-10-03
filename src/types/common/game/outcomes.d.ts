@@ -32,6 +32,7 @@ interface MoveSpecification<Coordinates extends LatticeCoords | RelativePosition
 type MoveSuccessBase = MoveBase & SuccessBase & MoveSpecification<LatticeCoords>;
 
 interface GetSuccessBase<T> extends SuccessBase {
+    piece: Piece;
     options: T;
 }
 

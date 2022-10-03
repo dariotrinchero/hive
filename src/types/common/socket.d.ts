@@ -55,14 +55,14 @@ export interface GameState {
 type ConnectionEvents = Record<`${ClientType} ${"dis" | ""}connected`, () => void>;
 
 export interface ServerToClient extends ConnectionEvents {
-    "player turn": (out: TurnResult, hash: string) => void;
+    "player turn": (result: TurnResult, hash: string) => void;
     "session": (session: ClientSession) => void;
     "game state": (state: GameState, hash: string) => void;
 }
 
 export interface ClientToServer {
     "game state request": (callback: (state: GameState) => void) => void;
-    "turn request": (req: TurnAttempt, callback: (out: TurnRequestResult, hash: string) => void) => void;
+    "turn request": (req: TurnAttempt, callback: (result: TurnRequestResult, hash: string) => void) => void;
 }
 
 export interface InterServer {

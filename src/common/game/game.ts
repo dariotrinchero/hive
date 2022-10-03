@@ -40,7 +40,7 @@ import type { LatticeCoords } from "@/types/common/game/hexGrid";
 
 export default class HiveGame extends HexGrid {
     // graph algorithms
-    private static graphUtils = new GraphUtils<LatticeCoords>(pos => pos.join(","));
+    private static readonly graphUtils = new GraphUtils<LatticeCoords>(pos => pos.join(","));
     private isCutVertex?: IsCutVertex<LatticeCoords>;
 
     // game state
@@ -117,12 +117,6 @@ export default class HiveGame extends HexGrid {
         const { currTurnColor, movedLastTurn, posToPiece, turnCount } = this;
         return { currTurnColor, movedLastTurn, posToPiece, turnCount };
     }
-
-    public getCurrTurnColor(): PieceColor { return this.currTurnColor; }
-
-    private getNextTurnColor(): PieceColor { return invertColor(this.currTurnColor); }
-
-    public getTurnCount(): number { return this.turnCount; }
 
     public getInventory(color: PieceColor): PieceCount { return this.playerInventories[color]; }
 
@@ -204,18 +198,18 @@ export default class HiveGame extends HexGrid {
         this.turnCount++;
         this.isCutVertex = undefined;
         this.movedLastTurn[this.currTurnColor] = moveDest || null;
-        this.currTurnColor = this.getNextTurnColor();
+        this.currTurnColor = invertColor(this.currTurnColor);
         this.gameStatus = this.checkGameStatus();
     }
 
     /**
-     * Return whether piece at given position is immobile (due to having been moved on prior turn).
+     * Return whether piece at given position is immobile (due to moving on prior turn).
      * 
      * @param pos position of piece to check
      * @returns whether piece is immobile
      */
     private isImmobile(pos: LatticeCoords): boolean {
-        const oppLastMove = this.movedLastTurn[this.getNextTurnColor()];
+        const oppLastMove = this.movedLastTurn[invertColor(this.currTurnColor)];
         return oppLastMove !== null && HiveGame.eqPos(oppLastMove, pos);
     }
 
@@ -281,7 +275,7 @@ export default class HiveGame extends HexGrid {
             .map(pos => [pos.join(","), "Normal"]));
 
         return Object.keys(options).length
-            ? { options, status: "Success", turnType: "Placement" }
+            ? { options, piece, status: "Success", turnType: "Placement" }
             : {
                 message: "ErrNoValidPlacementTargets",
                 status: "Error",
@@ -382,7 +376,7 @@ export default class HiveGame extends HexGrid {
         const options = pillbugPositions.filter(mountable);
         if (!options.length) return { ...err, message: "ErrGateBlocksPillbugMount" };
 
-        return { options, status: "Success" };
+        return { options, piece, status: "Success" };
     }
 
     /**
@@ -618,6 +612,7 @@ export default class HiveGame extends HexGrid {
             ? {
                 options,
                 pathMap: GraphUtils.mergePaths(...pathMaps),
+                piece,
                 status: "Success",
                 turnType: "Movement"
             } : {

@@ -1,5 +1,5 @@
 import { Fragment, h } from "preact";
-import { useContext, useEffect, useState } from "preact/hooks";
+import { useContext, useLayoutEffect, useState } from "preact/hooks";
 
 import "@/client/styles/Board";
 
@@ -10,12 +10,13 @@ import type {
     GetMoveResult,
     MovementType,
     MoveOptions,
-    MoveType
+    MoveType,
+    TurnResult
 } from "@/types/common/game/outcomes";
 
 import HexGrid from "@/common/game/hexGrid";
 import Notation from "@/client/utility/notation";
-import ConvertCoords from "@/client/utility/convertCoords";
+import ConvertCoords, { SVGCoords } from "@/client/utility/convertCoords";
 
 import { UISettingContext, WithPremove } from "@/client/components/GameUI";
 
@@ -28,6 +29,7 @@ export interface BoardProps {
     // game state
     piecePositions: PosToPiece;
     turnCount: number;
+    lastTurn?: TurnResult;
 
     interactivity?: {
         // player inventory
@@ -40,76 +42,90 @@ export interface BoardProps {
     };
 }
 
-interface Selected {
-    piece?: Piece;
+interface SpecialTile {
+    piece: Piece;
+    pos: LatticeCoords;
+    turnType: MoveType; // whether piece is on board / inventory
+    state: TileState; // special state of this tile
+    animateFrom?: SVGCoords;
+}
+interface Placeholders {
     options: MoveOptions;
-    turnType: MoveType;
     pathMap?: PathMap<LatticeCoords>;
 }
 interface HoveredPlaceholder {
     type: MovementType;
     pos: LatticeCoords;
 }
-interface ShakingTile {
-    piece?: Piece;
-    key: number; // used to trigger remount to repeat animations
-}
+type ShakeKey = number; // used to trigger remount & restart CSS animations
 
-const initSelected: Selected = { options: {}, turnType: "Movement" };
-const initPlaceholder: HoveredPlaceholder = { pos: [NaN, NaN], type: "Normal" };
-const initShaking: ShakingTile = { key: 1 };
+const initHovered: HoveredPlaceholder = { pos: [NaN, NaN], type: "Normal" };
+const initPlaceholders: Placeholders = { options: {} };
 
 export default function Board(props: BoardProps): h.JSX.Element {
-    const [selected, setSelected] = useState<Selected>(initSelected);
-    const [placeholder, setHover] = useState<HoveredPlaceholder>(initPlaceholder);
-    const [shaking, setShaking] = useState<ShakingTile>(initShaking);
+    const [hovered, setHover] = useState<HoveredPlaceholder>(initHovered);
+    const [placeholders, setPlaceholders] = useState<Placeholders>(initPlaceholders);
+    const [special, setSpecial] = useState<SpecialTile>();
+    const [shakeKey, setShakeKey] = useState<ShakeKey>(1);
+
+    useLayoutEffect(() => {
+        resetState(true);
+        if (props.lastTurn?.status === "Success" && props.lastTurn.turnType !== "Pass") {
+            const { destination, piece, turnType } = props.lastTurn;
+            setSpecial({
+                animateFrom: turnType === "Movement" ? props.lastTurn.origin : undefined,
+                piece,
+                pos: destination,
+                state: turnType === "Movement" ? "Sliding" : "Dropping",
+                turnType: "Movement"
+            });
+        }
+    }, [props.turnCount, props.lastTurn]);
 
     const hexDims = useContext(UISettingContext);
+    const svgCoords = (p: LatticeCoords) => ConvertCoords.hexLatticeToSVG(hexDims.hexGap, ...p);
 
-    useEffect(resetState, [props.turnCount]);
-
-    function resetState(): void {
-        setSelected(initSelected);
-        setHover(initPlaceholder);
-        setShaking((prev: ShakingTile) => ({ key: prev.key }));
+    function resetState(preserveSpecial?: boolean): void {
+        if (!preserveSpecial) setSpecial(undefined);
+        setHover(initHovered);
+        setPlaceholders(initPlaceholders);
     }
 
+    /**
+     * Render move path, representing path to be taken for currently-selected move.
+     * 
+     * @returns SVG path element representing move path
+     */
     function renderMovePath(): h.JSX.Element | undefined {
-        if (!selected.pathMap) return;
-        const { pos, type } = placeholder;
-        const movePath = `M${[pos].concat(selected.pathMap(pos))
-            .map(p => ConvertCoords.hexLatticeToSVG(hexDims.hexGap, ...p).join(","))
-            .join("L")}`;
+        if (!placeholders.pathMap) return;
+        const { pos, type } = hovered;
+        const movePath = `M${[pos].concat(placeholders.pathMap(pos))
+            .map(p => svgCoords(p).join(",")).join("L")}`;
         return <path class={`move-path ${type}`} d={movePath} />;
-    }
-
-    function handlePlaceholderClick(turnType: MoveType, pos: LatticeCoords): void {
-        if (selected.piece) {
-            props.interactivity?.attemptMove(selected.piece, pos, turnType);
-            resetState();
-        }
     }
 
     /**
      * Render tile for each active placeholder, as long as board is interactive.
      * 
-     * @param options TODO
-     * @param turnType TODO
-     * @returns Fragment containing child Tile for each placeholder on board
+     * @param locations locations at which to render placeholders
+     * @param moveType whether placeholder is for a movement or placement selection
+     * @returns Fragment containing child Placeholder component for each placeholder on board
      */
-    function renderPlaceholders(options: MoveOptions, turnType: MoveType): h.JSX.Element | undefined {
-        if (!props.interactivity || selected.turnType !== turnType) return;
+    function renderPlaceholders(locations: MoveOptions, moveType: MoveType): h.JSX.Element | undefined {
+        if (!props.interactivity || special?.turnType !== moveType) return;
         return (
             <Fragment>
-                {HexGrid.entriesOfPosRecord(options).map(([pos, type]) => {
-                    const handleClick = () => handlePlaceholderClick(turnType, pos);
-                    const handleMouseEnter = () => setHover({ pos, type });
+                {HexGrid.entriesOfPosRecord(locations).map(([pos, type]) => {
+                    const handleClick = () => {
+                        props.interactivity?.attemptMove(special.piece, pos, moveType);
+                        resetState();
+                    };
                     return (
                         <Placeholder
                             key={`${pos.join(",")}${type}`}
-                            pos={ConvertCoords.hexLatticeToSVG(hexDims.hexGap, ...pos)}
+                            pos={svgCoords(pos)}
                             handleClick={handleClick}
-                            handleMouseEnter={handleMouseEnter}
+                            handleMouseEnter={() => setHover({ pos, type })}
                             type={type}
                         />
                     );
@@ -118,79 +134,98 @@ export default function Board(props: BoardProps): h.JSX.Element {
         );
     }
 
-    function handleTileClick(piece: Piece, turnType: MoveType): void {
+    function handleTileClick(piece: Piece, pos: LatticeCoords, moveType: MoveType): void {
         if (!props.interactivity) return;
 
-        resetState();
-        if (!selected.piece || turnType === "Placement" && !HexGrid.eqPiece(selected.piece, piece)) {
-            const { outcome, premove } = props.interactivity.getMoves(piece, turnType);
+        if (special?.state === "Selected" && HexGrid.eqPiece(special.piece, piece)) resetState();
+        else {
+            resetState(true);
+            const { outcome, premove } = props.interactivity.getMoves(piece, moveType);
 
             if (outcome.status === "Success") {
-                setSelected({ ...outcome, piece });
-                setShaking(initShaking);
+                setSpecial({ ...outcome, pos, state: "Selected" });
+                setPlaceholders({ ...outcome });
             } else {
-                if (turnType === "Movement")
-                    setShaking((prev: ShakingTile) => ({ key: -prev.key, piece }));
-                console.error(`No legal moves; getMoves() returned message: ${outcome.message}`);
+                setSpecial({ ...outcome, piece, pos, state: "Shaking" });
+                setShakeKey((prev: number) => -prev);
+                console.error(`No legal moves; getMoves() gave message: ${outcome.message}`);
             }
         }
     }
 
     /**
-     * Render tiles for each of the current game pieces.
+     * Render single given piece tile.
+     * 
+     * @param piece the piece to render
+     * @param pos position of tile
+     * @param moveType move type piece is capable of (ie. whether it is placed yet)
+     * @param inactive whether tile should be inactive
+     * @returns Tile representing given piece at given location
+     */
+    function renderTile(piece: Piece, pos: SVGCoords, moveType: MoveType, inactive?: boolean): h.JSX.Element {
+        let state: TileState = "Inactive";
+        if (props.interactivity && !inactive) {
+            if (special?.turnType === moveType
+                && HexGrid.eqPiece(piece, special.piece)) state = special.state;
+            else if (special?.state !== "Selected" || moveType === "Placement") state = "Normal";
+        }
+        return (
+            <Tile
+                key={`${Notation.pieceToString(piece)}${state === "Shaking" ? shakeKey : ""}`}
+                piece={piece}
+                pos={pos}
+                slideFrom={special?.animateFrom && svgCoords(special.animateFrom)}
+                handleClick={() => handleTileClick(piece, pos, moveType)}
+                state={state}
+            />
+        );
+    }
+
+    /**
+     * Render tiles for each of the current game pieces; ensures last-moved tile always renders
+     * last (ie. on top).
      * 
      * @returns Fragment containing a child Tile for each piece tile on the board
      */
-    function renderPieceTiles(): h.JSX.Element {
+    function renderTiles(): h.JSX.Element {
+        const slidingTile = ({ piece, pos }: NonNullable<SpecialTile>) => {
+            const svgPos = svgCoords(pos);
+            return (
+                <Fragment>
+                    {piece.covering && renderTile(piece.covering, svgPos, "Movement", true)}
+                    {renderTile(piece, svgPos, "Movement")}
+                </Fragment>
+            );
+        };
         return (
             <Fragment>
                 {HexGrid.entriesOfPosRecord(props.piecePositions).map(([pos, piece]) => {
-                    let state: TileState = "Inactive";
-                    if (props.interactivity) {
-                        if (shaking.piece && HexGrid.eqPiece(piece, shaking.piece)) state = "Shaking";
-                        else if (!selected.piece) state = "Normal";
-                        else if (selected.turnType === "Movement" &&
-                            HexGrid.eqPiece(piece, selected.piece)) state = "Selected";
-                    }
-
-                    // key must change for shaking tiles to force remount & restart CSS animation
-                    // see: https://css-tricks.com/restart-css-animation/
-                    const key = `${Notation.pieceToString(piece)}${state === "Shaking" ? shaking.key : ""}`;
-                    const handleClick = () => handleTileClick(piece, "Movement");
-
-                    return (
-                        <Tile
-                            // TODO without key, all pieces transition at once, but with one nothing transitions
-                            key={key}
-                            piece={piece}
-                            pos={ConvertCoords.hexLatticeToSVG(hexDims.hexGap, ...pos)}
-                            handleClick={handleClick}
-                            state={state}
-                        />
-                    );
+                    if (special?.state === "Sliding" && HexGrid.eqPiece(piece, special.piece)) return;
+                    return renderTile(piece, svgCoords(pos), "Movement");
                 })}
+                {special?.state === "Sliding" && slidingTile(special)}
             </Fragment>
         );
     }
 
-    const handleInventoryClick = (piece: Piece) => handleTileClick(piece, "Placement");
+    const renderInvTile = (piece: Piece, pos: LatticeCoords) =>
+        renderTile(piece, pos, "Placement");
 
     return (
         <div id="board">
             {props.interactivity &&
                 <Inventory
                     {...props.interactivity}
-                    selected={selected.turnType === "Placement" ? selected.piece : undefined}
-                    selectPiece={handleInventoryClick}
+                    renderTile={renderInvTile}
                 />}
             <div id="board-panel">
                 <ViewPort
                     viewRange={[5.3, 5.3]}
                     panAndZoom={true}
                 >
-                    {renderPieceTiles()}
-                    {renderPlaceholders(selected.options, "Movement")}
-                    {renderPlaceholders(selected.options, "Placement")}
+                    {renderTiles()}
+                    {renderPlaceholders(placeholders.options, "Movement")}
+                    {renderPlaceholders(placeholders.options, "Placement")}
                     {renderMovePath()}
                 </ViewPort>
             </div>

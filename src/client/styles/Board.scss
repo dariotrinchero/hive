@@ -1,6 +1,6 @@
 // Length of move path dashes
-$dashon: 26;
-$dashoff: 22;
+$dashon: 22;
+$dashoff: 30;
 
 // animation duration
 $duration: 0.7s;
@@ -11,6 +11,8 @@ $inv-width: 20%;
 .move-path {
     stroke: hsla(295, 86%, 62%, 0.7);
     stroke-width: 11px;
+    stroke-linejoin: round;
+    stroke-linecap: round;
     fill: none;
     stroke-dasharray: $dashon, $dashoff;
     pointer-events: none;

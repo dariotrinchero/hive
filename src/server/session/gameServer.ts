@@ -114,7 +114,7 @@ export default class GameServer {
         socket.to(gameId).emit(`${clientType} connected`);
 
         // send current game state to new client
-        if (gameDetails.game.getTurnCount() > 0) {
+        if (gameDetails.game.getState().turnCount > 0) {
             const state = gameDetails.game.getState();
             socket.emit("game state", state, sum(state));
         }
@@ -136,14 +136,15 @@ export default class GameServer {
         socket.on("turn request", (req, callback) => {
             let msg: TurnRequestErrorMsg | undefined;
             const oldHash = sum(gameDetails.game.getState());
+            const { currTurnColor, turnCount } = gameDetails.game.getState();
 
             // reject if client may not take turn
             if (!this.activeGames[gameId]) msg = "ErrInvalidGameId";
             else if (clientType === "Spectator") msg = "ErrSpectator";
-            else if (clientDetails.color !== gameDetails.game.getCurrTurnColor()) msg = "ErrOutOfTurn";
+            else if (clientDetails.color !== currTurnColor) msg = "ErrOutOfTurn";
             else {
                 const bothOnline = Object.values(gameDetails.online.Player).every(p => p);
-                if (gameDetails.game.getTurnCount() === 0 && !bothOnline) {
+                if (turnCount === 0 && !bothOnline) {
                     msg = "ErrNeedOpponentOnline"; // require both players online for first move
                 }
             }

@@ -6,9 +6,7 @@ import HiveGame from "@/common/game/game";
 
 import type { ClientToServer, GameState, ServerToClient, TurnRequestResult } from "@/types/common/socket";
 import type { GenericTurnAttempt, SpecificTurnAttempt, TurnAttempt, TurnResult } from "@/types/common/game/outcomes";
-import type { PlayerColor } from "@/types/client/gameClient";
-
-type Premove = SpecificTurnAttempt;
+import type { PlayerColor, ReRenderFn } from "@/types/client/gameClient";
 
 // key used to persist session ID in local storage
 const localStorageSessionIdName = "sessionId";
@@ -21,17 +19,17 @@ export default class GameClient {
     public game: HiveGame = new HiveGame();
     private playerColor: PlayerColor;
     private bothJoined: boolean;
-    
+
     // pending premove
-    private premove?: Premove;
+    private premove?: SpecificTurnAttempt;
 
-    // callbacks for rendering
-    private readonly rerender: () => void;
+    // rendering callback
+    private readonly rerender: (res?: TurnResult) => void;
 
-    constructor(rerender: (state: GameState, started: boolean) => void) {
+    constructor(rerender: ReRenderFn) {
         this.playerColor = "Spectator";
         this.bothJoined = false;
-        this.rerender = () => rerender(this.game.getState(), this.bothJoined);
+        this.rerender = res => rerender(this.game.getState(), this.bothJoined, res);
 
         this.socket = io(document.location.pathname, {
             auth: { sessionId: localStorage.getItem(localStorageSessionIdName) }
@@ -43,19 +41,7 @@ export default class GameClient {
 
     private bindSocketEvents() {
         this.socket.on("connect", () => {
-            // void this.processTurns( // TODO for dev debugging only
-            //     "bA .",
-            //     "wG bA1-",
-            //     "bB /bA1",
-            //     "wL wG1-",
-            //     "bM -bA1",
-            //     "wP wG1\\",
-            //     "bQ \\bA1",
-            //     "wQ wG1/",
-            //     "bS bB1\\",
-            //     "wB wP-",
-            //     "bB \\bM"
-            // );
+            // TODO do anything here?
         });
 
         this.socket.prependAny((...args) => console.log(args)); // TODO for dev debugging only
@@ -86,10 +72,10 @@ export default class GameClient {
             if (process.env.AUTOKILL) window.close();
         });
 
-        this.socket.on("player turn", (outcome, hash) => {
-            if (outcome.status === "Error") return;
-            this.game.processTurn(outcome);
-            this.syncLocalGame(hash);
+        this.socket.on("player turn", (result, hash) => {
+            if (result.status === "Error") return;
+            this.game.processTurn(result);
+            this.syncLocalGame(hash, result);
             if (this.premove) void this.submitTurnRequest(this.premove); // dispatch pending premove
         });
 
@@ -128,36 +114,36 @@ export default class GameClient {
     public async processTurns(...turn: GenericTurnAttempt[]): Promise<TurnResult[]>;
     public async processTurns(...turnNotation: string[]): Promise<(TurnResult | ParseError)[]>;
     public async processTurns(...turnOrNotation: string[] | GenericTurnAttempt[]): Promise<(TurnRequestResult | ParseError)[]> {
-        const result: (TurnRequestResult | ParseError)[] = [];
+        const results: (TurnRequestResult | ParseError)[] = [];
         for (const tON of turnOrNotation) {
             let turn: GenericTurnAttempt | ParseError;
             if (typeof tON === "string") {
                 turn = Notation.stringToTurnAttempt(tON);
                 if (turn === "ParseError") {
-                    result.push("ParseError");
+                    results.push("ParseError");
                     continue;
                 }
             } else turn = tON;
 
-            const outcome = await this.submitTurnRequest(turn);
-            result.push(outcome);
+            const result = await this.submitTurnRequest(turn);
+            results.push(result);
         }
-        return result;
+        return results;
     }
 
     private submitTurnRequest(req: TurnAttempt): Promise<TurnRequestResult> {
         this.cancelPremove();
         return new Promise(resolve => {
-            this.socket.emit("turn request", req, (outcome, hash) => {
-                console.log(outcome);
+            this.socket.emit("turn request", req, (result, hash) => {
+                console.log(result);
                 console.log(`New hash: ${hash}`);
 
-                if (outcome.status === "Success") {
-                    this.game.processTurn(outcome);
-                    this.syncLocalGame(hash);
+                if (result.status === "Success") {
+                    this.game.processTurn(result);
+                    this.syncLocalGame(hash, result);
                 }
 
-                resolve(outcome);
+                resolve(result);
             });
         });
     }
@@ -169,7 +155,7 @@ export default class GameClient {
      * @param req the move attempt to queue
      */
     public queueMove(req: SpecificTurnAttempt): void {
-        if (this.playerColor === this.game.getCurrTurnColor()) {
+        if (this.playerColor === this.game.getState().currTurnColor) {
             void this.submitTurnRequest(req);
         } else this.premove = req;
     }
@@ -178,11 +164,11 @@ export default class GameClient {
         this.premove = undefined;
     }
 
-    private syncLocalGame(expectedHash: string): void {
+    private syncLocalGame(expectedHash: string, result?: TurnResult): void {
         if (expectedHash !== sum(this.game.getState())) {
             console.warn("Local state out-of-sync with server; retrieving serverside state");
             this.socket.emit("game state request", state => this.loadState(state));
-        } else this.rerender();
+        } else this.rerender(result);
     }
 
     private loadState(state: GameState): void {

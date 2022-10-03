@@ -91,7 +91,7 @@ export default abstract class HexGrid {
      * Get adjacent positions that a piece is able to slide into, keeping contact with hive.
      * 
      * @param pos position from which to find adjacencies
-     * @param ignore position which should be treated as empty (eg. position of piece in transit)
+     * @param ignore position to treat as empty (eg. position of piece in transit)
      * @returns adjacent valid slide positions
      */
     protected adjSlideSpaces(pos: LatticeCoords, ignore?: LatticeCoords): LatticeCoords[] {
@@ -113,7 +113,7 @@ export default abstract class HexGrid {
      * Get adjacent positions that a piece is able to climb up/down onto, obeying freedom-to-move rule.
      * 
      * @param pos position from which to find adjacencies
-     * @param ignore position which should be treated as containing one fewer piece (eg. position of piece in transit)
+     * @param ignore position to treat as containing one fewer piece (eg. position of piece in transit)
      * @param dismount if true/false, only return moves that specifically do/don't dismount the hive;
      *                 otherwise returns all kind of moves along top of hive
      * @returns adjacent valid mount positions
@@ -128,7 +128,8 @@ export default abstract class HexGrid {
             const gateHeights = [5, 1].map(d => this.getPieceAt(arr[(i + d) % 6])?.height || 0);
             const destination = this.getPieceAt(adjPos);
 
-            let canMount: boolean | undefined = Math.min(...gateHeights) <= Math.max(height, destination?.height || 0);
+            let canMount: boolean | undefined = Math.min(...gateHeights)
+                <= Math.max(height, destination?.height || 0);
             if (dismount === true) canMount &&= !destination;
             else if (dismount === false) canMount &&= typeof destination !== "undefined";
             else canMount &&= typeof destination !== "undefined" || height >= 1;

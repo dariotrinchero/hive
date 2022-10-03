@@ -26,27 +26,31 @@ $tile-colors: (
 );
 
 g.tile {
-    transition: translate 150ms ease-in-out 0s;
-
     @each $player-color, $color in $tile-colors {
         .#{$player-color} {
             fill: $color;
         }
     }
 
-    &.Selected {
-        stroke: hsla(295, 86%, 42%, 0.8);
+    &.Dropping {
+        animation: 150ms ease-out 0s 1 normal none running tiledrop;
     }
 
-    &.Normal:hover,
-    &.Shaking:hover,
-    &.Selected:hover {
-        stroke: hsla(311, 91%, 47%, 0.65);
-        cursor: pointer;
+    &.Sliding { // tileslide keyframes are defined by Tile component
+        animation: 150ms ease-in-out 0s 1 normal none running tileslide;
     }
 
     &.Shaking {
         animation: 110ms ease-in-out 0s 3 normal none running tileshake;
+    }
+
+    &.Selected {
+        stroke: hsla(295, 86%, 42%, 0.8);
+    }
+
+    &:not(.Inactive):hover {
+        stroke: hsla(311, 91%, 47%, 0.65);
+        cursor: pointer;
     }
 }
 
@@ -89,5 +93,15 @@ g.tile {
 
     to {
         rotate: 0deg;
+    }
+}
+
+@keyframes tiledrop {
+    from {
+        scale: 1.3;
+    }
+
+    to {
+        scale: 1;
     }
 }
