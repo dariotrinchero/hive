@@ -25,6 +25,6 @@ export const pieceInventory: PieceCount = {
     Pillbug: 1,
     QueenBee: 1,
     Spider: 2
-};
+} as const;
 
 export const invertColor = (color: PieceColor): PieceColor => color === "Black" ? "White" : "Black";

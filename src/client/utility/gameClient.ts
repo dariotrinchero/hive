@@ -1,12 +1,14 @@
 import { io, Socket } from "socket.io-client";
 
 import Notation, { ParseError } from "@/client/utility/notation";
+import AudioPlayer, { SoundEffect } from "@/client/utility/audioPlayer";
+
 import sum from "@/common/objectHash";
 import HiveGame from "@/common/game/game";
 
+import type { PlayerColor, ReRenderFn } from "@/types/client/gameClient";
 import type { ClientToServer, GameState, ServerToClient, TurnRequestResult } from "@/types/common/socket";
 import type { GenericTurnAttempt, SpecificTurnAttempt, TurnAttempt, TurnResult } from "@/types/common/game/outcomes";
-import type { PlayerColor, ReRenderFn } from "@/types/client/gameClient";
 
 // key used to persist session ID in local storage
 const localStorageSessionIdName = "sessionId";
@@ -72,7 +74,7 @@ export default class GameClient {
             if (process.env.AUTOKILL) window.close();
         });
 
-        this.socket.on("player turn", (result, hash) => {
+        this.socket.on("player turn", (result, hash) => {            
             if (result.status === "Error") return;
             this.game.processTurn(result);
             this.syncLocalGame(hash, result);
@@ -165,6 +167,8 @@ export default class GameClient {
     }
 
     private syncLocalGame(expectedHash: string, result?: TurnResult): void {
+        AudioPlayer.play(SoundEffect.TileDropping);
+
         if (expectedHash !== sum(this.game.getState())) {
             console.warn("Local state out-of-sync with server; retrieving serverside state");
             this.socket.emit("game state request", state => this.loadState(state));

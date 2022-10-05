@@ -1,6 +1,6 @@
 import { Fragment, h } from "preact";
 
-import icons from "@/client/icons.json";
+import icons from "@/client/assets/icons.json";
 
 import type { PieceType } from "@/types/common/game/piece";
 import { useContext } from "preact/hooks";

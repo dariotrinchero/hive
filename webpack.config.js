@@ -33,6 +33,10 @@ module.exports = (env, args) => {
                 {
                     test: /\.(s(a|c)ss)$/,
                     use: [ MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader' ]
+                },
+                {
+                    test: /\.(png|svg|jpg|jpeg|gif|ogg|mp3|wav)$/i,
+                    type: 'asset/resource'
                 }
             ],
         },
@@ -87,6 +91,7 @@ module.exports = (env, args) => {
             output: {
                 filename: '[name].[contenthash].js',
                 path: path.resolve(__dirname, 'dist/client'),
+                assetModuleFilename: 'assets/[name].[contenthash][ext]',
                 clean: true,
                 publicPath
             },
@@ -95,7 +100,7 @@ module.exports = (env, args) => {
                     inject: true,
                     template: path.resolve(__dirname, 'index.html'),
                 }),
-                new MiniCssExtractPlugin(),
+                new MiniCssExtractPlugin({ filename: '[name].[contenthash].css' }),
                 ...injectEnv
             ],
             ...common,
