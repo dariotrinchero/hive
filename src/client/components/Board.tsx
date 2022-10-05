@@ -157,12 +157,12 @@ export default function Board(props: BoardProps): h.JSX.Element {
      * Render single given piece tile.
      * 
      * @param piece the piece to render
-     * @param pos position of tile
+     * @param pos position of tile (in lattice coordinates)
      * @param moveType move type piece is capable of (ie. whether it is placed yet)
      * @param inactive whether tile should be inactive
      * @returns Tile representing given piece at given location
      */
-    function renderTile(piece: Piece, pos: SVGCoords, moveType: MoveType, inactive?: boolean): h.JSX.Element {
+    function renderTile(piece: Piece, pos: LatticeCoords, moveType: MoveType, inactive?: boolean): h.JSX.Element {
         let state: TileState = "Inactive";
         if (props.interactivity && !inactive) {
             if (special?.turnType === moveType
@@ -173,7 +173,7 @@ export default function Board(props: BoardProps): h.JSX.Element {
             <Tile
                 key={`${Notation.pieceToString(piece)}${state === "Shaking" ? shakeKey : ""}`}
                 piece={piece}
-                pos={pos}
+                pos={svgCoords(pos)}
                 slideFrom={special?.animateFrom && svgCoords(special.animateFrom)}
                 handleClick={() => handleTileClick(piece, pos, moveType)}
                 state={state}
@@ -188,29 +188,24 @@ export default function Board(props: BoardProps): h.JSX.Element {
      * @returns Fragment containing a child Tile for each piece tile on the board
      */
     function renderTiles(): h.JSX.Element {
-        const slidingTile = ({ piece, pos }: NonNullable<SpecialTile>) => {
-            const svgPos = svgCoords(pos);
-            return (
-                <Fragment>
-                    {piece.covering && renderTile(piece.covering, svgPos, "Movement", true)}
-                    {renderTile(piece, svgPos, "Movement")}
-                </Fragment>
-            );
-        };
+        const slidingTile = ({ piece, pos }: NonNullable<SpecialTile>) => (
+            <Fragment>
+                {piece.covering && renderTile(piece.covering, pos, "Movement", true)}
+                {renderTile(piece, pos, "Movement")}
+            </Fragment>
+        );
         return (
             <Fragment>
                 {HexGrid.entriesOfPosRecord(props.piecePositions).map(([pos, piece]) => {
                     if (special?.state === "Sliding" && HexGrid.eqPiece(piece, special.piece)) return;
-                    return renderTile(piece, svgCoords(pos), "Movement");
+                    return renderTile(piece, pos, "Movement");
                 })}
                 {special?.state === "Sliding" && slidingTile(special)}
             </Fragment>
         );
     }
 
-    const renderInvTile = (piece: Piece, pos: LatticeCoords) =>
-        renderTile(piece, pos, "Placement");
-
+    const renderInvTile = (piece: Piece) => renderTile(piece, [0, 0], "Placement");
     return (
         <div id="board">
             {props.interactivity &&

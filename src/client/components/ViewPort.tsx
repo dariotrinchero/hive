@@ -21,7 +21,7 @@ export default function ViewPort(props: ViewPortProps): h.JSX.Element {
     const [transform, setTransform] = useState<Transform>({
         pan: [ // hex radius is globally fixed to 100
             -100 * props.viewRange[0],
-            -100 * (props.viewRange[1] - 0.5)
+            -100 * props.viewRange[1]
         ],
         zoom: 1
     });
