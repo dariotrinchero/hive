@@ -1,4 +1,4 @@
-import { Fragment, h } from "preact";
+import { h } from "preact";
 
 import icons from "@/client/assets/icons.json";
 
@@ -21,18 +21,17 @@ function HexDefs(): h.JSX.Element {
             .catch(err => console.error("Error while fetching bug icons:", err));
     }, []);
 
-    const hexDims = useContext(UISettingContext);
+    const { cornerRad } = useContext(UISettingContext);
 
     /**
-     * Get path definition for hexagon of given radius, with rounded corners of given radius.
+     * Get path definition for hexagon of fixed radius 100, with rounded corners of radius
+     * given by props.
      *
-     * @param hexRad radius of circle in which un-rounded hexagon fits snugly
-     * @param cornerRad radius of circle arcs to use for rounding corners (cuts off corner)
      * @returns path definition (attribute 'd' of SVG <path> element)
      */
-    function roundedHexPath(hexRad: number, cornerRad: number): string {
+    function roundedHexPath(): string {
         const thirdPi: number = Math.PI / 3;
-        const innerRad: number = hexRad - 2 * cornerRad / Math.sqrt(3);
+        const innerRad: number = 100 - 2 * cornerRad / Math.sqrt(3);
 
         let hexPath = "";
         for (let i = 0; i < 6; i++) {
@@ -46,21 +45,6 @@ function HexDefs(): h.JSX.Element {
                 + `A${cornerRad},${cornerRad},0,0,0,${x2},${y2}`; // arc to (x2,y2)
         }
         return `${hexPath}Z`; // close path
-    }
-
-    /**
-     * Render bug icon paths, each with ID set to the bug type.
-     * 
-     * @returns Fragment containing a child path for each bug type
-     */
-    function renderBugDefs(): h.JSX.Element | undefined {
-        if (!bugPaths) return;
-        return (
-            <Fragment>
-                {Object.entries(bugPaths).map(([bug, path]) =>
-                    <path key={bug} id={bug} d={path} />)}
-            </Fragment>
-        );
     }
 
     /**
@@ -95,10 +79,12 @@ function HexDefs(): h.JSX.Element {
                 >
                     <path
                         id="rounded-hex"
-                        d={roundedHexPath(100, hexDims.cornerRad)} // hex radius globally fixed to 100
+                        d={roundedHexPath()}
                     />
                 </g>
-                {renderBugDefs()}
+                {bugPaths && Object.entries(bugPaths).map(
+                    ([bug, path]) => <path key={bug} id={bug} d={path} />
+                )}
                 {renderPlaceholderDef()}
             </defs>
         </svg>

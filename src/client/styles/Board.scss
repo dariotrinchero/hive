@@ -1,39 +1,36 @@
-// Length of move path dashes
+// move path configuration
 $dashon: 22;
 $dashoff: 30;
+$dashflowDuration: 0.7s;
+$normalStroke: hsla(295, 86%, 62%, 0.7);
+$pillbugStroke: hsla(164, 50%, 50%, 0.8);
 
-// animation duration
-$duration: 0.7s;
+// play area color
+$boardBackground: hsl(0, 0%, 98%);
 
 .move-path {
-    stroke: hsla(295, 86%, 62%, 0.7);
+    stroke: $normalStroke;
     stroke-width: 11px;
     stroke-linejoin: round;
     stroke-linecap: round;
     fill: none;
     stroke-dasharray: $dashon, $dashoff;
     pointer-events: none;
-    animation: $duration linear 0s infinite normal none running dashflow;
+    animation: $dashflowDuration linear 0s infinite normal none running dashflow;
 
     &.Pillbug {
-        stroke: hsla(164, 39%, 45%, 0.7);
+        stroke: $pillbugStroke;
     }
 }
 
 div#board {
-    // TODO currently overflows the screen in height
     display: flex;
     flex-flow: row nowrap;
-    // position: fixed;
-    top: 0;
-    bottom: 0;
-    height: 100%;
     width: 100vw;
+    background: $boardBackground;
 
-    div {
-        border: 1px solid hsl(0, 0%, 70%);
-        margin: -0.5px;
-        flex: 1 100%; // overridden by inventory
+    div#board-panel {
+        flex: 1 100%;
     }
 }
 

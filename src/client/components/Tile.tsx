@@ -3,7 +3,7 @@ import { useContext } from "preact/hooks";
 
 import "@/client/styles/Tile";
 
-import type { Piece, PieceColor } from "@/types/common/game/piece";
+import type { Piece } from "@/types/common/game/piece";
 import type { BaseTileProps } from "@/types/client/tile";
 import type { SVGCoords } from "@/client/utility/convertCoords";
 
@@ -13,7 +13,6 @@ export type TileState = "Normal" | "Inactive" | "Selected" | "Shaking" | "Slidin
 export interface TileProps extends BaseTileProps {
     piece: Piece;
     state: TileState;
-    showBadge?: boolean;
     slideFrom?: SVGCoords;
 }
 
@@ -24,12 +23,15 @@ const infoBadgeMinInset = 120 / 6;
 function Tile(props: TileProps): h.JSX.Element {
     const hexDims = useContext(UISettingContext);
 
-    function renderInfoBadge(color: PieceColor, content: string): h.JSX.Element {
+    const { height, type, color } = props.piece;
+
+    function renderInfoBadge(): h.JSX.Element | undefined {
+        if (!height || height < 2) return;
+
         const sqrt3: number = Math.sqrt(3);
         const inset: number = Math.max(hexDims.cornerRad, infoBadgeMinInset);
         const scaledOvershoot: number = 0.9 * (inset - infoBadgeMinInset);
         const halfRad: number = 50 - inset / sqrt3;
-
         const [cx, cy] = [
             sqrt3 * halfRad + scaledOvershoot,
             -halfRad - 0.5 * scaledOvershoot
@@ -39,13 +41,12 @@ function Tile(props: TileProps): h.JSX.Element {
             <g id="info-badge" class={color}>
                 <circle cx={cx} cy={cy} r={infoBadgeRadius} />
                 <text dominant-baseline="central" x={cx} y={cy}>
-                    {content}
+                    {height}
                 </text>
             </g>
         );
     }
 
-    const { height, type, color } = props.piece;
     const mouseDown = (e: MouseEvent) => {
         e.stopImmediatePropagation(); // prevent interfering with parent component
         if (props.state !== "Inactive" && props.handleClick) props.handleClick();
@@ -67,8 +68,7 @@ function Tile(props: TileProps): h.JSX.Element {
             >
                 <use xlinkHref="#outlined-rounded-hex" class={color} />
                 <use xlinkHref={`#${type}`} />
-                {(props.showBadge || typeof props.showBadge === "undefined" && height && height > 1)
-                    && renderInfoBadge(color, `${height || 1}`)}
+                {renderInfoBadge()}
             </g>
         </Fragment>
     );

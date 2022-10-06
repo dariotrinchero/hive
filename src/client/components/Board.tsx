@@ -107,15 +107,14 @@ export default function Board(props: BoardProps): h.JSX.Element {
     /**
      * Render tile for each active placeholder, as long as board is interactive.
      * 
-     * @param locations locations at which to render placeholders
-     * @param moveType whether placeholder is for a movement or placement selection
+     * @param moveType whether placeholders are for movement or placement selection
      * @returns Fragment containing child Placeholder component for each placeholder on board
      */
-    function renderPlaceholders(locations: MoveOptions, moveType: MoveType): h.JSX.Element | undefined {
+    function renderPlaceholders(moveType: MoveType): h.JSX.Element | undefined {
         if (!props.interactivity || special?.turnType !== moveType) return;
         return (
             <Fragment>
-                {HexGrid.entriesOfPosRecord(locations).map(([pos, type]) => {
+                {HexGrid.entriesOfPosRecord(placeholders.options).map(([pos, type]) => {
                     const handleClick = () => {
                         props.interactivity?.attemptMove(special.piece, pos, moveType);
                         resetState();
@@ -219,8 +218,8 @@ export default function Board(props: BoardProps): h.JSX.Element {
                     panAndZoom={true}
                 >
                     {renderTiles()}
-                    {renderPlaceholders(placeholders.options, "Movement")}
-                    {renderPlaceholders(placeholders.options, "Placement")}
+                    {renderPlaceholders("Movement")}
+                    {renderPlaceholders("Placement")}
                     {renderMovePath()}
                 </ViewPort>
             </div>

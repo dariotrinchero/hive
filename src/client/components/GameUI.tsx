@@ -1,6 +1,8 @@
 import { createContext, h } from "preact";
 import { useRef, useState } from "preact/hooks";
 
+import "@/client/styles/GameUI";
+
 import HiveGame from "@/common/game/game";
 import GameClient from "@/client/utility/gameClient";
 
@@ -13,6 +15,7 @@ import type { LatticeCoords } from "@/types/common/game/hexGrid";
 import Board, { BoardProps } from "@/client/components/Board";
 import Spinner from "@/client/components/Spinner";
 import HexDefs from "@/client/components/HexDefs";
+import Header from "@/client/components/Header";
 
 export interface WithPremove<T extends GetMoveResult> {
     outcome: T;
@@ -63,10 +66,11 @@ export default function GameUI() {
 
     return (
         <UISettingContext.Provider value={hexDims}>
-            <header>
-                <h1>{started ? playerColor : "...waiting for opponent"}</h1>
-                <span>{playerColor === gameState.currTurnColor ? "Your turn" : <span>&nbsp;</span>}</span>
-            </header>
+            <Header
+                currTurnColor={gameState.currTurnColor}
+                playerColor={playerColor}
+                started={started}
+            />
             <HexDefs />
             {!started
                 ? <Spinner />
@@ -75,7 +79,8 @@ export default function GameUI() {
                     piecePositions={gameState.posToPiece}
                     turnCount={gameState.turnCount}
                     interactivity={boardInteractivity}
-                />}
+                />
+            }
         </UISettingContext.Provider>
     );
 }

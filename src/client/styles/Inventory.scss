@@ -1,10 +1,12 @@
 // inventory panel width
 $inv-width: 20%;
 
-div#board div#inventory-panel {
+// dashed dividing line
+$panelBorder: hsl(224, 41%, 29%);
+
+div#inventory-panel {
     display: grid;
     overflow: auto;
-
     flex: 1 $inv-width;
 
     // center whole grid vertically; note 'safe' might not be supported:
@@ -17,4 +19,13 @@ div#board div#inventory-panel {
     // add rows as needed, all fitting content
     grid-auto-flow: row;
     grid-auto-rows: min-content;
+}
+
+div#board-panel::before {
+    // dividing line
+    content: "";
+    border-right: 2px dashed $panelBorder;
+    position: absolute;
+    top: 100px;
+    bottom: 10px;
 }

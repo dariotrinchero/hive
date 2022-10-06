@@ -166,8 +166,9 @@ export default class GameClient {
         this.premove = undefined;
     }
 
-    private syncLocalGame(expectedHash: string, result?: TurnResult): void {
-        AudioPlayer.play(SoundEffect.TileDropping);
+    private syncLocalGame(expectedHash: string, result: TurnResult): void {
+        if (result.turnType === "Placement") AudioPlayer.play(SoundEffect.TileDropping);
+        else if (result.turnType === "Movement") AudioPlayer.play(SoundEffect.TileSliding);
 
         if (expectedHash !== sum(this.game.getState())) {
             console.warn("Local state out-of-sync with server; retrieving serverside state");

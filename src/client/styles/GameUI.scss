@@ -1,0 +1,14 @@
+body,
+html {
+    display: flex;
+    flex-flow: column nowrap;
+    height: 100%;
+    padding: 0px;
+    margin: 0px;
+    overflow: hidden;
+
+    div#board {
+        height: 10%;
+        flex-grow: 1;
+    }
+}
