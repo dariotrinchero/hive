@@ -1,7 +1,7 @@
 import express from "express";
 import { createServer, Server as HTTPServer } from "http";
 import { Namespace, Server } from "socket.io";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 
 import sum from "@/common/objectHash";
 import { invertColor } from "@/common/game/piece";

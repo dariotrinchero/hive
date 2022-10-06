@@ -15,7 +15,7 @@ const sfxToUrl = [
     // TODO add sounds here in order of SoundEffect entries
 ] as const;
 
-const defaultGain = 0.7;
+const defaultGain = 0.3; // TODO set this to something sensible
 
 export default abstract class AudioPlayer {
     private static audioContext: AudioContext;
@@ -28,18 +28,18 @@ export default abstract class AudioPlayer {
      * Asynchronously initialize by fetching all sound effect files, and creating and
      * connecting a gain node for volume-controlled playback.
      * 
-     * @param volume optional value to which to set audio gain
-     * @param loaded optional callback to call once fully initialized
+     * @param callback optional callback to call once initialized
+     * @param callbackAt trigger callback early when this sound is ready to play
      */
-    public static init(volume?: number, loaded?: () => void): void {
+    public static init(callback?: () => void, callbackAt?: SoundEffect): void {
         this.initialized = true;
         this.audioContext = new AudioContext();
 
         this.gain = this.audioContext.createGain();
-        this.gain.gain.value = volume || defaultGain;
+        this.gain.gain.value = defaultGain;
         this.gain.connect(this.audioContext.destination); // final node in graph
 
-        this.loadBuffers(sfxToUrl, this.audioBuffers, loaded);
+        this.loadBuffers(sfxToUrl, this.audioBuffers, callback, callbackAt);
     }
 
     /**
@@ -51,10 +51,10 @@ export default abstract class AudioPlayer {
     public static play(sound: SoundEffect, volume?: number): void {
         if (!this.initialized) {
             console.warn("Automatically initializing before playing sound.");
-            this.init(volume, () => this.play(sound, volume));
+            this.init(() => this.play(sound, volume), sound);
             return;
         }
-        if (sound >= this.audioBuffers.length) {
+        if (sound >= this.audioBuffers.length || !this.audioBuffers[sound]) {
             console.warn("Ignoring attempt to play sound not loaded by initialization.");
             return;
         }
@@ -72,22 +72,29 @@ export default abstract class AudioPlayer {
      * 
      * @param urls list of URLs of audio files to load
      * @param buffers list of audio buffers to which to append retrieved files
-     * @param loaded optional callback to call once all buffers are loaded
+     * @param callback optional callback to call once loaded
+     * @param callbackAt trigger callback early when this buffer (vs. all buffers) is loaded
      */
     private static loadBuffers(
         urls: readonly string[],
         buffers: AudioBuffer[],
-        loaded?: () => void
+        callback?: () => void,
+        callbackAt?: SoundEffect
     ): void {
-        for (const url of urls) {
+        let totalLoaded = 0;
+        urls.forEach((url, index) => {
             fetch(url)
                 .then(response => response.arrayBuffer())
                 .then(arrayBuf => this.audioContext.decodeAudioData(arrayBuf))
                 .then(audioBuf => {
-                    buffers.push(audioBuf);
-                    if (buffers.length === urls.length && loaded) loaded();
+                    buffers[index] = audioBuf; // cannot .push() as buffers can load out of order
+                    totalLoaded++;
+                    if (callback) {
+                        if (callbackAt === index) callback();
+                        else if (totalLoaded === urls.length) callback();
+                    }
                 })
                 .catch(err => console.error("Error fetching or decoding audio file:", err));
-        }
+        });
     }
 }
