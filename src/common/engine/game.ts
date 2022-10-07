@@ -1,6 +1,6 @@
-import { invertColor, pieceInventory } from "@/common/game/piece";
-import GraphUtils from "@/common/game/graph";
-import HexGrid from "@/common/game/hexGrid";
+import { invertColor, pieceInventory } from "@/common/engine/piece";
+import GraphUtils from "@/common/engine/graph";
+import HexGrid from "@/common/engine/hexGrid";
 
 import type {
     CanMoveErrorMsg,
@@ -23,20 +23,20 @@ import type {
     PlacementResult,
     TurnAttempt,
     TurnResult
-} from "@/types/common/game/outcomes";
-import type { Piece, PieceColor, PieceCount, PieceType } from "@/types/common/game/piece";
+} from "@/types/common/engine/outcomes";
+import type { Piece, PieceColor, PieceCount, PieceType } from "@/types/common/engine/piece";
 import type { GameState } from "@/types/common/socket";
 import type {
     GameStatus,
     LastMoveDestination,
     MoveGen,
+    OkOr,
+    OkPillbugOr,
     PlacementCount,
-    PlayerInventories,
-    SuccessOr,
-    SuccessPillbugOr
-} from "@/types/common/game/game";
-import type { BFSAdj, Filter, IsCutVertex, PathMap } from "@/types/common/game/graph";
-import type { LatticeCoords } from "@/types/common/game/hexGrid";
+    PlayerInventories
+} from "@/types/common/engine/game";
+import type { BFSAdj, Filter, IsCutVertex, PathMap } from "@/types/common/engine/graph";
+import type { LatticeCoords } from "@/types/common/engine/hexGrid";
 
 export default class HiveGame extends HexGrid {
     // graph algorithms
@@ -220,7 +220,7 @@ export default class HiveGame extends HexGrid {
      * @param colorOverride overrides current color to move (used for premoves)
      * @returns whether given piece may legally be placed this turn
      */
-    private pieceMayBePlaced(piece: Piece, colorOverride?: PieceColor): SuccessOr<CanPlaceErrorMsg> {
+    private pieceMayBePlaced(piece: Piece, colorOverride?: PieceColor): OkOr<CanPlaceErrorMsg> {
         const colorToMove = colorOverride || this.currTurnColor;
 
         // immediate rejections
@@ -242,7 +242,7 @@ export default class HiveGame extends HexGrid {
             && this.noFirstQueen;
         if (cannotBeQueen) return "ErrCannotBeQueen";
 
-        return "Success";
+        return "Ok";
     }
 
     /**
@@ -256,7 +256,7 @@ export default class HiveGame extends HexGrid {
     private getPlacements(piece: Piece, colorOverride?: PieceColor): GetPlacementResult {
         // check that placement is legal
         const mayBePlaced = this.pieceMayBePlaced(piece, colorOverride);
-        if (mayBePlaced !== "Success") return {
+        if (mayBePlaced !== "Ok") return {
             message: mayBePlaced,
             status: "Error",
             turnType: "Placement"
@@ -275,7 +275,7 @@ export default class HiveGame extends HexGrid {
             .map(pos => [pos.join(","), "Normal"]));
 
         return Object.keys(options).length
-            ? { options, piece, status: "Success", turnType: "Placement" }
+            ? { options, piece, status: "Ok", turnType: "Placement" }
             : {
                 message: "ErrNoValidPlacementTargets",
                 status: "Error",
@@ -288,15 +288,15 @@ export default class HiveGame extends HexGrid {
      * 
      * @param piece piece to place
      * @param destination position at which to place
-     * @returns success, or error message indicating reason for illegality
+     * @returns "Ok" or error message indicating reason for illegality
      */
-    private checkPlacement(piece: Piece, destination: LatticeCoords): SuccessOr<PlacementErrorMsg> {
+    private checkPlacement(piece: Piece, destination: LatticeCoords): OkOr<PlacementErrorMsg> {
         // check that piece may be placed at all
         const mayBePlaced = this.pieceMayBePlaced(piece);
-        if (mayBePlaced !== "Success") return mayBePlaced;
+        if (mayBePlaced !== "Ok") return mayBePlaced;
 
         // always accept first placement if not out-of-turn
-        if (this.turnCount === 0) return "Success";
+        if (this.turnCount === 0) return "Ok";
 
         // immediate rejections
         if (this.getPieceAt(destination)) return "ErrDestinationOccupied";
@@ -307,7 +307,7 @@ export default class HiveGame extends HexGrid {
             && this.adjPieces(destination).some(p => p.color !== piece.color);
         if (illegalNeighbour) return "ErrTouchesOppColor";
 
-        return "Success";
+        return "Ok";
     }
 
     /**
@@ -325,7 +325,7 @@ export default class HiveGame extends HexGrid {
 
         // report any placement errors
         const message = this.checkPlacement(piece, destination);
-        if (message !== "Success") return { ...err, message };
+        if (message !== "Ok") return { ...err, message };
 
         // spawn piece
         this.setPos(destination, piece);
@@ -337,7 +337,7 @@ export default class HiveGame extends HexGrid {
         this.playerInventories[piece.color][piece.type] -= 1;
         this.advanceTurn();
 
-        return { destination, piece, status: "Success", turnType: "Placement" };
+        return { destination, piece, status: "Ok", turnType: "Placement" };
     }
 
     /**
@@ -376,7 +376,7 @@ export default class HiveGame extends HexGrid {
         const options = pillbugPositions.filter(mountable);
         if (!options.length) return { ...err, message: "ErrGateBlocksPillbugMount" };
 
-        return { options, piece, status: "Success" };
+        return { options, piece, status: "Ok" };
     }
 
     /**
@@ -417,9 +417,9 @@ export default class HiveGame extends HexGrid {
      * @param piece piece to move
      * @param fromPos location of piece prior to move
      * @param colorOverride overrides current color to move (used for premoves)
-     * @returns success, or error message indicating reason for illegality
+     * @returns "Ok", "PillbugOnly", or error message indicating reason for illegality
      */
-    private pieceMayMove(piece: Piece, fromPos?: LatticeCoords, colorOverride?: PieceColor): SuccessPillbugOr<CanMoveErrorMsg> {
+    private pieceMayMove(piece: Piece, fromPos?: LatticeCoords, colorOverride?: PieceColor): OkPillbugOr<CanMoveErrorMsg> {
         const colorToMove = colorOverride || this.currTurnColor;
 
         // basic rejections
@@ -443,10 +443,10 @@ export default class HiveGame extends HexGrid {
         if (colorToMove !== piece.color) {
             // to move piece of opponent color, there must be valid pillbugs adjacent
             const adjPillbugs = this.findPillbugs(piece, fromPos, colorToMove);
-            return adjPillbugs.status === "Success" ? "PillbugOnly" : adjPillbugs.message;
+            return adjPillbugs.status === "Ok" ? "PillbugOnly" : adjPillbugs.message;
         }
 
-        return "Success";
+        return "Ok";
     }
 
     /**
@@ -555,7 +555,7 @@ export default class HiveGame extends HexGrid {
         if (!fromPos) return () => [];
 
         const adjPillbugs = this.findPillbugs(piece, fromPos, colorToMove);
-        if (adjPillbugs.status !== "Success") return () => [];
+        if (adjPillbugs.status !== "Ok") return () => [];
 
         // yield dismount points from all mountable pillbugs & return path map
         const { options } = adjPillbugs;
@@ -582,7 +582,7 @@ export default class HiveGame extends HexGrid {
     private getMovements(piece: Piece, colorOverride?: PieceColor): GetMovementResult {
         // check that piece can move at all
         const mayMove = this.pieceMayMove(piece, undefined, colorOverride);
-        if (mayMove !== "Success" && mayMove !== "PillbugOnly") return {
+        if (mayMove !== "Ok" && mayMove !== "PillbugOnly") return {
             message: mayMove,
             status: "Error",
             turnType: "Movement"
@@ -613,7 +613,7 @@ export default class HiveGame extends HexGrid {
                 options,
                 pathMap: GraphUtils.mergePaths(...pathMaps),
                 piece,
-                status: "Success",
+                status: "Ok",
                 turnType: "Movement"
             } : {
                 message: "ErrNoValidMoveDestinations",
@@ -628,12 +628,12 @@ export default class HiveGame extends HexGrid {
      * @param piece piece to move
      * @param fromPos location of piece prior to move
      * @param toPos location of piece after move
-     * @returns success, or error message indicating reason for illegality
+     * @returns "Ok", "PillbugOnly", or error message indicating reason for illegality
      */
-    private checkMovement(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords): SuccessPillbugOr<MovementErrorMsg> {
+    private checkMovement(piece: Piece, fromPos: LatticeCoords, toPos: LatticeCoords): OkPillbugOr<MovementErrorMsg> {
         // check that piece can move at all
         const mayMove = this.pieceMayMove(piece, fromPos);
-        if (mayMove !== "Success" && mayMove !== "PillbugOnly") return mayMove;
+        if (mayMove !== "Ok" && mayMove !== "PillbugOnly") return mayMove;
 
         // check that destination is valid
         if (HiveGame.eqPos(fromPos, toPos)) return "ErrAlreadyThere";
@@ -673,7 +673,7 @@ export default class HiveGame extends HexGrid {
         const fromPos = this.getPosOf(piece);
         if (!fromPos) return { ...err, message: "ErrInvalidMovingPiece" };
         const message = this.checkMovement(piece, fromPos, destination);
-        if (message !== "Success" && message !== "PillbugOnly") return { ...err, message };
+        if (message !== "Ok" && message !== "PillbugOnly") return { ...err, message };
 
         // update covering info
         this.setPos(fromPos, piece.covering);
@@ -684,7 +684,7 @@ export default class HiveGame extends HexGrid {
         this.setPos(destination, piece);
         this.advanceTurn(destination);
 
-        return { destination, origin: fromPos, piece, status: "Success", turnType: "Movement" };
+        return { destination, origin: fromPos, piece, status: "Ok", turnType: "Movement" };
     }
 
     /**
@@ -709,8 +709,7 @@ export default class HiveGame extends HexGrid {
             const outcome = this.getPlacements(piece);
             if (outcome.status !== "Error") {
                 const option = HiveGame.entriesOfPosRecord(outcome.options)[0][0];
-                const destination = this.absToRel(option);
-                if (destination) return { ...err, exampleMove: { destination, piece } };
+                return { ...err, exampleMove: { destination: this.absToRel(option), piece } };
             }
         }
 
@@ -726,13 +725,12 @@ export default class HiveGame extends HexGrid {
                 const outcome = this.getMovements(piece);
                 if (outcome.status !== "Error") {
                     const option = HiveGame.entriesOfPosRecord(outcome.options)[0][0];
-                    const destination = this.absToRel(option);
-                    if (destination) return { ...err, exampleMove: { destination, piece } };
+                    return { ...err, exampleMove: { destination: this.absToRel(option), piece } };
                 }
             }
         }
 
         this.advanceTurn();
-        return { status: "Success", turnType: "Pass" };
+        return { status: "Ok", turnType: "Pass" };
     }
 }

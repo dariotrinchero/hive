@@ -3,7 +3,7 @@ import { h } from "preact";
 import "@/client/styles/Placeholder";
 
 import type { BaseTileProps } from "@/types/client/tile";
-import type { MovementType } from "@/types/common/game/outcomes";
+import type { MovementType } from "@/types/common/engine/outcomes";
 
 export interface PlaceholderProps extends BaseTileProps {
     type: MovementType;

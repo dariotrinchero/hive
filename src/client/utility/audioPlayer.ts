@@ -17,7 +17,7 @@ const sfxToUrl = [
     // TODO add sounds here in order of SoundEffect entries
 ] as const;
 
-const defaultGain = 0.5; // TODO set this to something sensible
+const defaultGain = 0.3; // TODO set this to something sensible
 
 export default abstract class AudioPlayer {
     private static audioContext: AudioContext;

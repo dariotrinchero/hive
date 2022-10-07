@@ -1,11 +1,11 @@
-import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
-import type { LatticeCoords, RelativePosition } from "@/types/common/game/hexGrid";
-import type { PathMap } from "@/types/common/game/graph";
+import type { Piece, PieceColor, PieceType } from "@/types/common/engine/piece";
+import type { LatticeCoords, RelativePosition } from "@/types/common/engine/hexGrid";
+import type { PathMap } from "@/types/common/engine/graph";
 
 export type MoveType = "Placement" | "Movement";
 export type MovementType = "Normal" | "Pillbug";
 export type TurnType = "Pass" | MoveType;
-type ResultStatus = "Success" | "Error";
+type ResultStatus = "Ok" | "Error";
 
 // turn type base interfaces
 interface TurnBase { turnType: TurnType; }
@@ -16,7 +16,7 @@ interface MovementBase extends MoveBase { turnType: "Movement"; }
 
 // result base interfaces
 interface ResultBase { status: ResultStatus; }
-interface SuccessBase extends ResultBase { status: "Success"; }
+interface OkBase extends ResultBase { status: "Ok"; }
 export interface ErrorBase extends ResultBase {
     status: "Error";
     message: string;
@@ -29,9 +29,9 @@ interface MoveSpecification<Coordinates extends LatticeCoords | RelativePosition
 }
 
 // success base interfaces
-type MoveSuccessBase = MoveBase & SuccessBase & MoveSpecification<LatticeCoords>;
+type MoveOkBase = MoveBase & OkBase & MoveSpecification<LatticeCoords>;
 
-interface GetSuccessBase<T> extends SuccessBase {
+interface GetOkBase<T> extends OkBase {
     piece: Piece;
     options: T;
 }
@@ -97,9 +97,9 @@ export type MovementErrorMsg =
     | `ErrViolates${PieceType}Movement`;
 
 // turn attempt result types
-type PassSuccess = PassBase & SuccessBase;
-type PlacementSuccess = PlacementBase & MoveSuccessBase;
-type MovementSuccess = MovementBase & MoveSuccessBase & {
+type PassOk = PassBase & OkBase;
+type PlacementOk = PlacementBase & MoveOkBase;
+type MovementOk = MovementBase & MoveOkBase & {
     origin: LatticeCoords;
 };
 
@@ -114,10 +114,10 @@ export interface MovementError extends MovementBase, ErrorBase {
     message: MovementErrorMsg;
 }
 
-export type PlacementResult = PlacementSuccess | PlacementError;
-export type MovementResult = MovementSuccess | MovementError;
+export type PlacementResult = PlacementOk | PlacementError;
+export type MovementResult = MovementOk | MovementError;
 export type MoveResult = PlacementResult | MovementResult;
-export type PassResult = PassSuccess | PassError;
+export type PassResult = PassOk | PassError;
 export type TurnResult = PassResult | MoveResult;
 
 // legal move lookup query types
@@ -129,8 +129,8 @@ export interface GetMoveQuery extends MoveBase {
 // legal move lookup result types
 export type MoveOptions = { [pos: string]: MovementType; };
 
-type GetPlacementSuccess = PlacementBase & GetSuccessBase<MoveOptions>;
-interface GetMovementSuccess extends MovementBase, GetSuccessBase<MoveOptions> {
+type GetPlacementOk = PlacementBase & GetOkBase<MoveOptions>;
+interface GetMovementOk extends MovementBase, GetOkBase<MoveOptions> {
     pathMap: PathMap<LatticeCoords>;
 }
 
@@ -141,8 +141,8 @@ interface GetMovementError extends MovementBase, ErrorBase {
     message: GetMovementErrorMsg;
 }
 
-export type GetPlacementResult = GetPlacementSuccess | GetPlacementError;
-export type GetMovementResult = GetMovementSuccess | GetMovementError;
+export type GetPlacementResult = GetPlacementOk | GetPlacementError;
+export type GetMovementResult = GetMovementOk | GetMovementError;
 export type GetMoveResult = GetPlacementResult | GetMovementResult;
 
 // adjacent pillbug mount lookup result types
@@ -150,4 +150,4 @@ export interface GetPillbugError extends ErrorBase {
     message: GetPillbugErrorMsg;
 }
 
-export type GetPillbugResult = GetPillbugError | GetSuccessBase<LatticeCoords[]>;
+export type GetPillbugResult = GetPillbugError | GetOkBase<LatticeCoords[]>;

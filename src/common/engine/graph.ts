@@ -6,7 +6,7 @@ import type {
     IsCutVertex,
     PathMap,
     Stringify
-} from "@/types/common/game/graph";
+} from "@/types/common/engine/graph";
 
 
 export default class GraphUtils<V> {

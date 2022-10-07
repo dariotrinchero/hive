@@ -7,9 +7,7 @@ import type {
     PieceColor,
     PieceCount,
     PieceType
-} from "@/types/common/game/piece";
-
-import ViewPort from "@/client/components/ViewPort";
+} from "@/types/common/engine/piece";
 
 export interface InventoryProps {
     playerColor: PieceColor;
@@ -22,13 +20,13 @@ function Inventory(props: InventoryProps): h.JSX.Element {
         <div id="inventory-panel">
             {Object.entries(props.inventory).map(([type, amount]) => {
                 if (amount > 0) return (
-                    <ViewPort viewRange={[1.05, 1.05]}>
+                    <svg viewBox={"-100 -100 200 200"}>
                         {props.renderTile({
                             color: props.playerColor,
                             height: amount,
                             type: type as PieceType
                         })}
-                    </ViewPort>
+                    </svg>
                 );
             })}
         </div>

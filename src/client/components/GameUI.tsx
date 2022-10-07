@@ -3,14 +3,14 @@ import { useRef, useState } from "preact/hooks";
 
 import "@/client/styles/GameUI";
 
-import HiveGame from "@/common/game/game";
+import HiveGame from "@/common/engine/game";
 import GameClient from "@/client/utility/gameClient";
 
-import type { Piece, PieceColor } from "@/types/common/game/piece";
-import type { GetMoveResult, MoveType, TurnResult } from "@/types/common/game/outcomes";
+import type { Piece, PieceColor } from "@/types/common/engine/piece";
+import type { GetMoveResult, MoveType, TurnResult } from "@/types/common/engine/outcomes";
 import type { GameState } from "@/types/common/socket";
 import type { PlayerColor } from "@/types/client/gameClient";
-import type { LatticeCoords } from "@/types/common/game/hexGrid";
+import type { LatticeCoords } from "@/types/common/engine/hexGrid";
 
 import Board, { BoardProps } from "@/client/components/Board";
 import Spinner from "@/client/components/Spinner";

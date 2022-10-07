@@ -1,17 +1,27 @@
+// stroke style
+$stroke-width: 3px;
+$normal-stroke: hsla(311, 91%, 52%, 0.5);
+$pillbug-stroke: hsla(164, 41%, 48%, 0.733);
+
+// fill colors
+$normal-fill: hsla(311, 91%, 52%, 0.2);
+$pillbug-fill: hsla(164, 41%, 48%, 0.467);
+
 .placeholder {
-    stroke: hsla(311, 91%, 52%, 0.5);
-    fill: hsla(0, 0%, 100%, 0);
+    stroke: $normal-stroke;
+    stroke-width: $stroke-width;
+    fill: hsla(0, 0%, 100%, 0); // fill with transparency to detect hover
 
     &:hover {
-        fill: hsla(311, 91%, 52%, 0.2);
+        fill: $normal-fill;
         cursor: pointer;
     }
 
     &.Pillbug {
-        stroke: hsla(164, 41%, 48%, 0.733);
+        stroke: $pillbug-stroke;
 
         &:hover {
-            fill: hsla(164, 41%, 48%, 0.467);
+            fill: $pillbug-fill;
         }
     }
 }

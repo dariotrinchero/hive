@@ -1,8 +1,8 @@
 import type { Namespace, Socket } from "socket.io";
 
-import type HiveGame from "@/common/game/game";
+import type HiveGame from "@/common/engine/game";
 
-import type { PieceColor } from "@/types/common/game/piece";
+import type { PieceColor } from "@/types/common/engine/piece";
 import type { ClientToServer, ClientType, InterServer, ServerToClient, SocketData } from "@/types/common/socket";
 
 export type OnlineSessions = {
@@ -36,6 +36,7 @@ export type ActiveGames = {
 
 // client details
 export type IOSocket = Socket<ClientToServer, ServerToClient, InterServer, SocketData>;
+export type IONamespace = Namespace<ClientToServer, ServerToClient, InterServer, SocketData>;
 
 interface ClientDetailBase {
     sessionId: string;

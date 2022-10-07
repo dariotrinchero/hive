@@ -3,7 +3,7 @@ import { useContext } from "preact/hooks";
 
 import "@/client/styles/Tile";
 
-import type { Piece } from "@/types/common/game/piece";
+import type { Piece } from "@/types/common/engine/piece";
 import type { BaseTileProps } from "@/types/client/tile";
 import type { SVGCoords } from "@/client/utility/convertCoords";
 
@@ -21,7 +21,7 @@ const infoBadgeRadius = 90 / 6;
 const infoBadgeMinInset = 120 / 6;
 
 function Tile(props: TileProps): h.JSX.Element {
-    const hexDims = useContext(UISettingContext);
+    const { cornerRad } = useContext(UISettingContext);
 
     const { height, type, color } = props.piece;
 
@@ -29,7 +29,7 @@ function Tile(props: TileProps): h.JSX.Element {
         if (!height || height < 2) return;
 
         const sqrt3: number = Math.sqrt(3);
-        const inset: number = Math.max(hexDims.cornerRad, infoBadgeMinInset);
+        const inset: number = Math.max(cornerRad, infoBadgeMinInset);
         const scaledOvershoot: number = 0.9 * (inset - infoBadgeMinInset);
         const halfRad: number = 50 - inset / sqrt3;
         const [cx, cy] = [
@@ -66,7 +66,7 @@ function Tile(props: TileProps): h.JSX.Element {
                 style={translate}
                 onMouseDown={props.handleClick && mouseDown}
             >
-                <use xlinkHref="#outlined-rounded-hex" class={color} />
+                <use xlinkHref="#rounded-hex" class={color} />
                 <use xlinkHref={`#${type}`} />
                 {renderInfoBadge()}
             </g>

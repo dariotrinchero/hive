@@ -1,23 +1,23 @@
-const { default: HiveGame } = require("@/common/game/game");
-const { default: Notation } = require("@/client/utility/notation");
+const { default: HiveGame } = require("@/common/engine/game");
+const { default: Notation } = require("@/common/engine/notation");
 
 let game = null;
 
 const forceMove = (notation) => {
-    turn = Notation.stringToTurnAttempt(notation);
+    turn = Notation.stringToGenericTurn(notation);
     return game.movePiece(turn.piece, game.relToAbs(turn.destination));
 };
 
 function processTurns() { // ordinary function so 'arguments' is defined
     let result;
     for (const notation of arguments) {
-        result = game.processTurn(Notation.stringToTurnAttempt(notation));
+        result = game.processTurn(Notation.stringToGenericTurn(notation));
     }
     return result;
 }
 
-const expectSuccess = (turn) =>
-    expect(processTurns(turn).status).toBe("Success");
+const expectOk = (turn) =>
+    expect(processTurns(turn).status).toBe("Ok");
 
 const expectError = (turn, message) => {
     expect(processTurns(turn).status).toBe("Error");
@@ -58,61 +58,61 @@ describe("When new piece is placed", () => {
     });
 
     it("rejects if out-of-turn", () => {
-        expectSuccess("bG .");
+        expectOk("bG .");
         expectError("bA bG1-", "ErrOutOfTurn");
         game = new HiveGame("White");
-        expectSuccess("wQ .");
+        expectOk("wQ .");
         expectError("wB wQ-", "ErrOutOfTurn");
     });
 
     it("rejects if player lacks inventory", () => {
-        expectSuccess("bB .");
-        expectSuccess("wG -bB1");
-        expectSuccess("bB bB1-");
-        expectSuccess("wQ -wG1");
+        expectOk("bB .");
+        expectOk("wG -bB1");
+        expectOk("bB bB1-");
+        expectOk("wQ -wG1");
         expectError("bB bB2-", "ErrOutOfPieces");
     });
 
     it("rejects if destination is on top of hive", () => {
-        expectSuccess("bB .");
+        expectOk("bB .");
         expectError("wG bB1", "ErrDestinationOccupied");
     });
 
     it("rejects if destination is occupied", () => {
-        expectSuccess("bB .");
-        expectSuccess("wG -bB1");
+        expectOk("bB .");
+        expectOk("wG -bB1");
         expectError("bG wG1-", "ErrDestinationOccupied");
     });
 
     it("rejects if destination does not exist", () => {
-        expectSuccess("bB .");
+        expectOk("bB .");
         expectError("wG bB2-", "ErrInvalidDestination");
     });
 
     it("rejects if destination reference piece is under-specified", () => {
-        expectSuccess("bB .");
+        expectOk("bB .");
         expectError("wG bB-", "ErrInvalidDestination");
     });
 
     it("rejects if destination borders opposing color", () => {
-        expectSuccess("bB .");
-        expectSuccess("wG bB1-");
+        expectOk("bB .");
+        expectOk("wG bB1-");
         expectError("bG bB1\\", "ErrTouchesOppColor");
-        expectSuccess("bG -bB1");
+        expectOk("bG -bB1");
         expectError("wG bB1\\", "ErrTouchesOppColor");
-        expectSuccess("wG wG1-");
+        expectOk("wG wG1-");
     });
 
     it("rejects anything but queen if is unplayed by 4th placement", () => {
-        expectSuccess("bB .");
-        expectSuccess("wG bB1-");
-        expectSuccess("bB -bB1");
-        expectSuccess("wQ wG1-");
-        expectSuccess("bS -bB2");
-        expectSuccess("wS wQ-");
+        expectOk("bB .");
+        expectOk("wG bB1-");
+        expectOk("bB -bB1");
+        expectOk("wQ wG1-");
+        expectOk("bS -bB2");
+        expectOk("wS wQ-");
         expectError("bS -bS1", "ErrMustBeQueen");
-        expectSuccess("bQ -bS1");
-        expectSuccess("wS wS1-");
+        expectOk("bQ -bS1");
+        expectOk("wS wS1-");
     });
 
     // TODO add test for optional tournament rule (no queen on 1st placement)
@@ -181,7 +181,7 @@ describe("When piece is moved", () => {
             "wB -wB1"
         );
         expectError("bG1 wQ-", "ErrDestinationOccupied");
-        expectSuccess("bB1 wQ-");
+        expectOk("bB1 wQ-");
     });
 
     it("rejects if destination is (explicitly) on top of hive (except for beetles)", () => {
@@ -194,7 +194,7 @@ describe("When piece is moved", () => {
             "wB -wB1"
         );
         expectError("bG1 bQ", "ErrDestinationOccupied");
-        expectSuccess("bB1 bQ");
+        expectOk("bB1 bQ");
     });
 
     it("rejects if out-of-turn without adjacent pillbug", () => {
@@ -204,7 +204,7 @@ describe("When piece is moved", () => {
             "bA bQ-",
             "wA -wQ"
         );
-        expectSuccess("bA1 wQ\\");
+        expectOk("bA1 wQ\\");
         expectError("bQ bA1-", "ErrNoPillbugTouching");
     });
 
@@ -213,7 +213,7 @@ describe("When piece is moved", () => {
             "bQ .",
             "wB -bQ"
         );
-        expectSuccess("bQ wB1\\");
+        expectOk("bQ wB1\\");
         expectError("wB1 bQ/", "ErrQueenUnplayed");
     });
 
@@ -227,13 +227,13 @@ describe("When piece is moved", () => {
             "wA wQ-",
             "bA bQ\\"
         );
-        expectSuccess("wA2 -wA1");
-        expectSuccess("bA3 /bA1");
-        expectSuccess("wA2 -bA1");
+        expectOk("wA2 -wA1");
+        expectOk("bA3 /bA1");
+        expectOk("wA2 -bA1");
         processTurns("bG bQ\\"); // change turn
-        expectSuccess("wA2 \\bA2");
+        expectOk("wA2 \\bA2");
         expectError("bA2 -wA1", "ErrOneHiveRule"); // disconnects "in-transit"
-        expectSuccess("bA3 \\wA2");
+        expectOk("bA3 \\wA2");
         expectError("wA2 wQ-", "ErrOneHiveRule"); // disconnects
     });
 
@@ -241,11 +241,11 @@ describe("When piece is moved", () => {
         setupStandardGame();
         expectError("wQ wL-", "ErrViolatesQueenBeeMovement");
         expectError("wQ bQ/", "ErrViolatesQueenBeeMovement");
-        expectSuccess("wQ \\wG1");
+        expectOk("wQ \\wG1");
         expectError("bQ bA1\\", "ErrViolatesQueenBeeMovement");
         expectError("bQ wQ/", "ErrViolatesQueenBeeMovement");
         expectError("bQ \\bB2", "ErrViolatesQueenBeeMovement");
-        expectSuccess("bQ bB2/");
+        expectOk("bQ bB2/");
         processTurns( // establish gate
             "wL bQ-",
             "bS1 wP\\"
@@ -260,7 +260,7 @@ describe("When piece is moved", () => {
         expectError("bS1 /wP", "ErrViolatesSpiderMovement");
         expectError("bS1 /bB1", "ErrViolatesSpiderMovement");
         expectError("bS1 -bB1", "ErrViolatesSpiderMovement");
-        expectSuccess("bS1 wP\\");
+        expectOk("bS1 wP\\");
         processTurns( // establish gate
             "wB1 wL",
             "bB1 /bM",
@@ -274,16 +274,16 @@ describe("When piece is moved", () => {
         );
         expectError("bS1 -wL", "ErrViolatesSpiderMovement"); // crosses gate
         expectError("bS1 bA1/", "ErrViolatesSpiderMovement"); // crosses gate
-        expectSuccess("bS1 /wG1"); // walks past gate
+        expectOk("bS1 /wG1"); // walks past gate
     });
 
     it("correctly handles one-hive rule with mounted pieces", () => {
         setupStandardGame();
-        expectSuccess("wQ bQ-");
-        expectSuccess("bM wQ-");
-        expectSuccess("wB1 /wP");
-        expectSuccess("bB2 bQ");
-        expectSuccess("wB1 bS1");
+        expectOk("wQ bQ-");
+        expectOk("bM wQ-");
+        expectOk("wB1 /wP");
+        expectOk("bB2 bQ");
+        expectOk("wB1 bS1");
     });
 
     // TODO add more specific bug movement checks

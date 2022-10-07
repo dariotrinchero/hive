@@ -1,12 +1,22 @@
-import { Bugs, Colors, pieceInventory } from "@/common/game/piece";
+import { Bugs, Colors, pieceInventory } from "@/common/engine/piece";
 
-import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
-import type { GenericTurnAttempt } from "@/types/common/game/outcomes";
-import type { Direction } from "@/types/common/game/hexGrid";
+import type HexGrid from "@/common/engine/hexGrid";
+
+import type { Piece, PieceColor, PieceType } from "@/types/common/engine/piece";
+import type { GenericTurnAttempt, SpecificTurnAttempt } from "@/types/common/engine/outcomes";
+import type { Direction } from "@/types/common/engine/hexGrid";
 
 export type ParseError = "ParseError";
 
 export default class Notation {
+
+    /**
+     * Convert a piece character into the corresponding piece type;
+     * eg. "B" -> Beetle, "G" -> Grasshopper, etc
+     * 
+     * @param char single character representing a piece type
+     * @returns piece type corresponding to given character
+     */
     private static charToPieceType(char: string): PieceType | ParseError {
         const bugs: string[] = Object.keys(Bugs);
         const type = bugs.slice(-bugs.length / 2) // first 1/2 of keys are indices
@@ -15,6 +25,13 @@ export default class Notation {
         return type as PieceType;
     }
 
+    /**
+     * Convert a color character into the correpsonding piece color;
+     * eg. "w" -> White, "b" -> "Black"
+     * 
+     * @param char single character representing a piece color
+     * @returns piece color corresponding to given character
+     */
     private static charToPieceColor(char: string): PieceColor | ParseError {
         const colors: string[] = Object.keys(Colors);
         const color = colors.slice(-colors.length / 2) // first 1/2 of keys are indices
@@ -23,6 +40,13 @@ export default class Notation {
         return color as PieceColor;
     }
 
+    /**
+     * Convert string representing a piece into the corresponding piece object;
+     * eg. "wG2" -> { type: "Grasshopper", color: "White", index: 2 }
+     * 
+     * @param notation 2- or 3-character string representing a piece
+     * @returns piece object corresponding to given string
+     */
     public static stringToPiece(notation: string): Piece | ParseError {
         if (notation.length < 2) return "ParseError";
 
@@ -40,13 +64,29 @@ export default class Notation {
         return { color, type };
     }
 
+    /**
+     * Get the notational representation of given piece.
+     * 
+     * @param piece a piece object
+     * @returns notation string representing given piece
+     */
     public static pieceToString(piece: Piece): string {
         const prefix = `${piece.color.charAt(0).toLowerCase()}${piece.type.charAt(0)}`;
         if (piece.index && pieceInventory[piece.type] !== 1) return `${prefix}${piece.index}`;
         return prefix;
     }
 
-    public static stringToTurnAttempt(notation: string): GenericTurnAttempt | ParseError {
+    /**
+     * Convert given notation string representing a turn into corresponding turn attempt object;
+     * eg. "wP bA1-" -> {
+     *          piece: [white pillbug],
+     *          destination: { referencePiece: [black ant 1], direction: "o-" }
+     *      }
+     * 
+     * @param notation "pass" or 2-word string encoding moving piece & location (relative to reference piece)
+     * @returns turn attempt object corresponding to given turn notation
+     */
+    public static stringToGenericTurn(notation: string): GenericTurnAttempt | ParseError {
         // special pass move
         if (notation.toLowerCase() === "pass") return { turnType: "Pass" };
 
@@ -80,7 +120,14 @@ export default class Notation {
         };
     }
 
-    public static turnAttemptToString(turn: GenericTurnAttempt): string {
+    /**
+     * Get the notational representation of given generic (ie. using relative coordinates)
+     * turn attempt.
+     * 
+     * @param turn a generic turn attempt object
+     * @returns notation string representing given turn
+     */
+    public static genericTurnToString(turn: GenericTurnAttempt): string {
         if ("turnType" in turn) return "pass";
         let destination = ".";
         if (turn.destination !== "Anywhere") {
@@ -90,5 +137,20 @@ export default class Notation {
             }
         }
         return `${Notation.pieceToString(turn.piece)} ${destination}`;
+    }
+
+    /**
+     * Get the notational representation of given specific (ie. using absolute lattice
+     * coordinates) turn attempt; an instance of HexGrid is needed to convert lattice coordinates
+     * to relative coordinates used by notation.
+     * 
+     * @param turn a specific turn attempt object
+     * @param grid instance of HexGrid used to convert to relative coordinates
+     * @returns notation string representing given turn
+     */
+    public static specificTurnToString(turn: SpecificTurnAttempt, grid: HexGrid): string {
+        if (turn.turnType === "Pass") return "pass";
+        const destination = grid.absToRel(turn.destination);
+        return this.genericTurnToString({ ...turn, destination });
     }
 }

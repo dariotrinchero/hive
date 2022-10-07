@@ -1,4 +1,4 @@
-import type { Bugs, Colors } from "@/common/game/piece";
+import type { Bugs, Colors } from "@/common/engine/piece";
 
 export type PieceColor = keyof typeof Colors;
 

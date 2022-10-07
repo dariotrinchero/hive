@@ -1,37 +1,34 @@
 // move path configuration
 $dashon: 22;
 $dashoff: 30;
-$dashflowDuration: 0.7s;
-$normalStroke: hsla(295, 86%, 62%, 0.7);
-$pillbugStroke: hsla(164, 50%, 50%, 0.8);
+$dashflow-duration: 0.7s;
+$stroke-width: 11px;
+$normal-stroke: hsla(295, 86%, 62%, 0.7);
+$pillbug-stroke: hsla(164, 50%, 50%, 0.8);
 
 // play area color
-$boardBackground: hsl(0, 0%, 98%);
+$background: hsl(0, 0%, 98%);
 
 .move-path {
-    stroke: $normalStroke;
-    stroke-width: 11px;
+    stroke: $normal-stroke;
+    stroke-width: $stroke-width;
     stroke-linejoin: round;
     stroke-linecap: round;
     fill: none;
     stroke-dasharray: $dashon, $dashoff;
     pointer-events: none;
-    animation: $dashflowDuration linear 0s infinite normal none running dashflow;
+    animation: $dashflow-duration linear 0s infinite normal none running dashflow;
 
     &.Pillbug {
-        stroke: $pillbugStroke;
+        stroke: $pillbug-stroke;
     }
 }
 
 div#board {
     display: flex;
-    flex-flow: row nowrap;
-    width: 100vw;
-    background: $boardBackground;
-
-    div#board-panel {
-        flex: 1 100%;
-    }
+    background: $background;
+    height: 10%;
+    flex-grow: 1;
 }
 
 @keyframes dashflow {

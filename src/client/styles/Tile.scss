@@ -1,6 +1,10 @@
 @use "sass:map";
 @use "sass:color";
 
+// info badge styling
+$badge-font: bold 20px Arial, Helvetica, sans-serif;
+
+// bug & tile colors
 $bug-colors: (
     Ant: hsl(199, 88%, 50%),
     Beetle: hsl(253, 31%, 60%),
@@ -12,6 +16,19 @@ $bug-colors: (
     Spider: hsl(28, 56%, 40%)
 );
 
+$tile-colors: (
+    "Black": hsl(40, 6%, 20%),
+    "White": hsl(40, 47%, 89%)
+);
+
+// tile outlines
+$tile-passive-stroke-width: 1px;
+$tile-highlighted-stroke-width: 6px;
+
+$tile-passive-stroke: hsl(224, 10%, 55%);
+$tile-selected-stroke: hsla(295, 86%, 42%, 0.8);
+$tile-hover-stroke: hsla(311, 91%, 47%, 0.65);
+
 @each $bug, $color in $bug-colors {
     ##{$bug} {
         fill: $color;
@@ -20,12 +37,10 @@ $bug-colors: (
     }
 }
 
-$tile-colors: (
-    "Black": hsl(40, 6%, 20%),
-    "White": hsl(40, 47%, 89%)
-);
-
 g.tile {
+    stroke: $tile-passive-stroke;
+    stroke-width: $tile-passive-stroke-width;
+
     @each $player-color, $color in $tile-colors {
         .#{$player-color} {
             fill: $color;
@@ -45,11 +60,13 @@ g.tile {
     }
 
     &.Selected {
-        stroke: hsla(295, 86%, 42%, 0.8);
+        stroke-width: $tile-highlighted-stroke-width;
+        stroke: $tile-selected-stroke;
     }
 
     &:not(.Inactive):hover {
-        stroke: hsla(311, 91%, 47%, 0.65);
+        stroke-width: $tile-highlighted-stroke-width;
+        stroke: $tile-hover-stroke;
         cursor: pointer;
     }
 }
@@ -59,9 +76,7 @@ g.tile {
 
     text {
         text-anchor: middle;
-        font-size: 20px;
-        font-family: Arial, Helvetica, sans-serif;
-        font-weight: bold;
+        font: $badge-font;
     }
 
     @each $player-color, $color in $tile-colors {

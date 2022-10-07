@@ -3,10 +3,10 @@ import type {
     TurnAttempt,
     TurnResult,
     TurnType
-} from "@/types/common/game/outcomes";
-import type { PieceColor } from "@/types/common/game/piece";
-import type { LastMoveDestination } from "@/types/common/game/game";
-import type { PosToPiece } from "@/types/common/game/hexGrid";
+} from "@/types/common/engine/outcomes";
+import type { PieceColor } from "@/types/common/engine/piece";
+import type { LastMoveDestination } from "@/types/common/engine/game";
+import type { PosToPiece } from "@/types/common/engine/hexGrid";
 
 // turn request (client-server-related) error message types
 export type TurnRequestErrorMsg = "ErrSpectator"

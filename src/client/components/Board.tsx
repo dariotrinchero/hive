@@ -3,19 +3,19 @@ import { useContext, useLayoutEffect, useState } from "preact/hooks";
 
 import "@/client/styles/Board";
 
-import type { LatticeCoords, PosToPiece } from "@/types/common/game/hexGrid";
-import type { PathMap } from "@/types/common/game/graph";
-import type { Piece, PieceColor, PieceCount } from "@/types/common/game/piece";
+import type { LatticeCoords, PosToPiece } from "@/types/common/engine/hexGrid";
+import type { PathMap } from "@/types/common/engine/graph";
+import type { Piece, PieceColor, PieceCount } from "@/types/common/engine/piece";
 import type {
     GetMoveResult,
     MovementType,
     MoveOptions,
     MoveType,
     TurnResult
-} from "@/types/common/game/outcomes";
+} from "@/types/common/engine/outcomes";
 
-import HexGrid from "@/common/game/hexGrid";
-import Notation from "@/client/utility/notation";
+import HexGrid from "@/common/engine/hexGrid";
+import Notation from "@/common/engine/notation";
 import ConvertCoords, { SVGCoords } from "@/client/utility/convertCoords";
 
 import { UISettingContext, WithPremove } from "@/client/components/GameUI";
@@ -70,7 +70,7 @@ export default function Board(props: BoardProps): h.JSX.Element {
 
     useLayoutEffect(() => {
         resetState(true);
-        if (props.lastTurn?.status === "Success" && props.lastTurn.turnType !== "Pass") {
+        if (props.lastTurn?.status === "Ok" && props.lastTurn.turnType !== "Pass") {
             const { destination, piece, turnType } = props.lastTurn;
             setSpecial({
                 animateFrom: turnType === "Movement" ? props.lastTurn.origin : undefined,
@@ -141,7 +141,7 @@ export default function Board(props: BoardProps): h.JSX.Element {
             resetState(true);
             const { outcome, premove } = props.interactivity.getMoves(piece, moveType);
 
-            if (outcome.status === "Success") {
+            if (outcome.status === "Ok") {
                 setSpecial({ ...outcome, pos, state: "Selected" });
                 setPlaceholders({ ...outcome });
             } else {
@@ -212,17 +212,15 @@ export default function Board(props: BoardProps): h.JSX.Element {
                     {...props.interactivity}
                     renderTile={renderInvTile}
                 />}
-            <div id="board-panel">
-                <ViewPort
-                    viewRange={[5.3, 5.3]}
-                    panAndZoom={true}
-                >
-                    {renderTiles()}
-                    {renderPlaceholders("Movement")}
-                    {renderPlaceholders("Placement")}
-                    {renderMovePath()}
-                </ViewPort>
-            </div>
+            <ViewPort
+                viewRange={[5.3, 5.3]}
+                panAndZoom={true}
+            >
+                {renderTiles()}
+                {renderPlaceholders("Movement")}
+                {renderPlaceholders("Placement")}
+                {renderMovePath()}
+            </ViewPort>
         </div>
     );
 }

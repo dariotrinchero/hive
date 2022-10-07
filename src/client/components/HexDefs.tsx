@@ -2,14 +2,10 @@ import { h } from "preact";
 
 import icons from "@/client/assets/icons.json";
 
-import type { PieceType } from "@/types/common/game/piece";
+import type { PieceType } from "@/types/common/engine/piece";
 import { useContext, useEffect, useState } from "preact/hooks";
 
 import { UISettingContext } from "@/client/components/GameUI";
-
-// TODO make these settings?
-const placeholderStrokeWidth = 75 / 18;
-const pieceTileStrokeWidth = Math.sqrt(3) * 100 / 18;
 
 function HexDefs(): h.JSX.Element {
     const [bugPaths, setBugPaths] = useState<Record<PieceType, string>>();
@@ -54,10 +50,7 @@ function HexDefs(): h.JSX.Element {
      */
     function renderPlaceholderDef(): h.JSX.Element {
         return (
-            <g
-                id="placeholder"
-                style={`stroke-width: ${placeholderStrokeWidth}px`}
-            >
+            <g id="placeholder">
                 {[0.95, 0.6].map((scale, index) =>
                     <use
                         key={index}
@@ -73,15 +66,10 @@ function HexDefs(): h.JSX.Element {
     return (
         <svg width={0} height={0}>
             <defs>
-                <g
-                    id="outlined-rounded-hex"
-                    style={`stroke-width: ${pieceTileStrokeWidth};`}
-                >
-                    <path
-                        id="rounded-hex"
-                        d={roundedHexPath()}
-                    />
-                </g>
+                <path
+                    id="rounded-hex"
+                    d={roundedHexPath()}
+                />
                 {bugPaths && Object.entries(bugPaths).map(
                     ([bug, path]) => <path key={bug} id={bug} d={path} />
                 )}

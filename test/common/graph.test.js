@@ -1,4 +1,4 @@
-const { default: GraphUtils } = require("@/common/game/graph");
+const { default: GraphUtils } = require("@/common/engine/graph");
 
 const graphUtils = new GraphUtils(v => v);
 

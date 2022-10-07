@@ -1,14 +1,14 @@
 import { io, Socket } from "socket.io-client";
 
-import Notation, { ParseError } from "@/client/utility/notation";
+import Notation, { ParseError } from "@/common/engine/notation";
 import AudioPlayer, { SoundEffect } from "@/client/utility/audioPlayer";
 
 import sum from "@/common/objectHash";
-import HiveGame from "@/common/game/game";
+import HiveGame from "@/common/engine/game";
 
 import type { PlayerColor, ReRenderFn } from "@/types/client/gameClient";
 import type { ClientToServer, GameState, ServerToClient, TurnRequestResult } from "@/types/common/socket";
-import type { GenericTurnAttempt, SpecificTurnAttempt, TurnAttempt, TurnResult } from "@/types/common/game/outcomes";
+import type { GenericTurnAttempt, SpecificTurnAttempt, TurnAttempt, TurnResult } from "@/types/common/engine/outcomes";
 
 // key used to persist session ID in local storage
 const localStorageSessionIdName = "sessionId";
@@ -82,21 +82,21 @@ export default class GameClient {
         });
 
         this.socket.on("Player connected", () => {
-            // TODO handle connect
+            // TODO log connection
             this.bothJoined = true;
             this.rerender();
         });
 
         this.socket.on("Player disconnected", () => {
-            // TODO handle disconnect
+            // TODO log disconnection & show spinner
         });
 
         this.socket.on("Spectator connected", () => {
-            // TODO handle connect
+            // TODO log connection
         });
 
         this.socket.on("Spectator disconnected", () => {
-            // TODO handle disconnect
+            // TODO log disconnection
         });
     }
 
@@ -120,7 +120,7 @@ export default class GameClient {
         for (const tON of turnOrNotation) {
             let turn: GenericTurnAttempt | ParseError;
             if (typeof tON === "string") {
-                turn = Notation.stringToTurnAttempt(tON);
+                turn = Notation.stringToGenericTurn(tON);
                 if (turn === "ParseError") {
                     results.push("ParseError");
                     continue;
@@ -140,7 +140,7 @@ export default class GameClient {
                 console.log(result);
                 console.log(`New hash: ${hash}`);
 
-                if (result.status === "Success") {
+                if (result.status === "Ok") {
                     this.game.processTurn(result);
                     this.syncLocalGame(hash, result);
                 }

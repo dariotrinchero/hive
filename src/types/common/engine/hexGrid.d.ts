@@ -1,5 +1,5 @@
-import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
-import { PlanarDirection } from "@/common/game/hexGrid";
+import type { Piece, PieceColor, PieceType } from "@/types/common/engine/piece";
+import { PlanarDirection } from "@/common/engine/hexGrid";
 
 // absolute grid positioning
 export type LatticeCoords = [number, number];

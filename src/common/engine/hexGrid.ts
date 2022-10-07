@@ -1,7 +1,7 @@
-import { Bugs, pieceInventory } from "@/common/game/piece";
+import { Bugs, pieceInventory } from "@/common/engine/piece";
 
-import type { Piece, PieceColor, PieceType } from "@/types/common/game/piece";
-import type { Direction, LatticeCoords, PieceToPos, PosToPiece, RelativePosition } from "@/types/common/game/hexGrid";
+import type { Piece, PieceColor, PieceType } from "@/types/common/engine/piece";
+import type { Direction, LatticeCoords, PieceToPos, PosToPiece, RelativePosition } from "@/types/common/engine/hexGrid";
 
 export enum PlanarDirection {
     // anticlockwise around reference (represented 'o') from o-->
@@ -137,7 +137,14 @@ export default abstract class HexGrid {
         });
     }
 
-    protected relToAbs(pos: RelativePosition): LatticeCoords | undefined {
+    /**
+     * Convert from given relative position (ie. relative to reference piece) to the equivalent
+     * absolute position (lattice coordinates).
+     * 
+     * @param pos position in relative coordinates
+     * @returns equivalent position in absolute (lattice) coordinates
+     */
+    public relToAbs(pos: RelativePosition): LatticeCoords | undefined {
         if (pos === "Anywhere") return [0, 0];
 
         const refPos = this.getPosOf(pos.referencePiece);
@@ -147,7 +154,15 @@ export default abstract class HexGrid {
         return this.adjCoords(refPos)[PlanarDirection[pos.direction]];
     }
 
-    protected absToRel(pos: LatticeCoords): RelativePosition | undefined {
+    /**
+     * Convert from given absolute position (lattice coordinates) to (one possible) equivalent
+     * relative position (ie. relative to reference piece); returns "Anywhere" if no reference
+     * pieces are adjacent to given position.
+     * 
+     * @param pos position in absolute (lattice) coordinates
+     * @returns equivalent position in relative coordinates
+     */
+    public absToRel(pos: LatticeCoords): RelativePosition {
         // if pos already points to piece
         const piece = this.getPieceAt(pos);
         if (piece) return { direction: "Above", referencePiece: piece };
@@ -168,6 +183,7 @@ export default abstract class HexGrid {
             referencePiece
         };
 
-        return;
+        // if pos is not next to anything
+        return "Anywhere";
     }
 }
