@@ -9,6 +9,7 @@ import HiveGame from "@/common/engine/game";
 import type { PlayerColor, ReRenderFn } from "@/types/client/gameClient";
 import type { ClientToServer, GameState, ServerToClient, TurnRequestResult } from "@/types/common/socket";
 import type { GenericTurnAttempt, SpecificTurnAttempt, TurnAttempt, TurnResult } from "@/types/common/engine/outcomes";
+import type { OptionalGameRules } from "@/types/common/engine/game";
 
 // key used to persist session ID in local storage
 const localStorageSessionIdName = "sessionId";
@@ -26,12 +27,19 @@ export default class GameClient {
     private premove?: SpecificTurnAttempt;
 
     // rendering callback
-    private readonly rerender: (res?: TurnResult) => void;
+    private readonly rerender: (lastTurn?: TurnResult, recenter?: boolean) => void;
 
     constructor(rerender: ReRenderFn) {
         this.playerColor = "Spectator";
         this.bothJoined = false;
-        this.rerender = res => rerender(this.game.getState(), this.bothJoined, res);
+        this.rerender = (lastTurn, recenter) => rerender(
+            {
+                ...this.game.getState(),
+                lastTurn,
+                started: this.bothJoined
+            },
+            recenter || false
+        );
 
         this.socket = io(document.location.pathname, {
             auth: { sessionId: localStorage.getItem(localStorageSessionIdName) }
@@ -48,23 +56,17 @@ export default class GameClient {
 
         this.socket.prependAny((...args) => console.log(args)); // TODO for dev debugging only
 
-        this.socket.on("game state", state => this.loadState(state));
-
         this.socket.on("session", session => {
             this.socket.auth = { sessionId: session.sessionId };
             localStorage.setItem(localStorageSessionIdName, session.sessionId);
 
-            if (session.spectating) {
-                console.error("Game full; joined as spectator.");
-                this.playerColor = "Spectator";
-            } else {
-                this.playerColor = session.color;
-                this.game.setNoFirstQueen(session.noFirstQueen);
-            }
-
             this.bothJoined = session.bothJoined;
-            this.game.setColorToStart(session.startingColor);
-            this.rerender();
+            if (session.spectating) {
+                console.warn("Game full; joined as spectator.");
+                this.playerColor = "Spectator";
+            } else this.playerColor = session.color;
+
+            this.loadState(session.state, session.rules);
         });
 
         this.socket.on("connect_error", err => {
@@ -74,8 +76,8 @@ export default class GameClient {
             if (process.env.AUTOKILL) window.close();
         });
 
-        this.socket.on("player turn", (result, hash) => {            
-            if (result.status === "Error") return;
+        this.socket.on("player turn", (result, hash) => {
+            if (result.status === "Err") return;
             this.game.processTurn(result);
             this.syncLocalGame(hash, result);
             if (this.premove) void this.submitTurnRequest(this.premove); // dispatch pending premove
@@ -176,10 +178,10 @@ export default class GameClient {
         } else this.rerender(result);
     }
 
-    private loadState(state: GameState): void {
+    private loadState(state: GameState, rules?: OptionalGameRules): void {
         console.warn(`Loading state with client-side hash ${sum(state)}`);
-        this.game = HiveGame.fromState(state);
-        this.rerender();
+        this.game = HiveGame.fromState(state, rules);
+        this.rerender(undefined, true);
         console.warn(`Loaded state has client-side hash ${sum(this.game.getState())}`);
     }
 }

@@ -1,7 +1,6 @@
 import type { PieceColor } from "@/types/common/engine/piece";
-import type { TurnResult } from "@/types/common/engine/outcomes";
-import type { GameState } from "@/types/common/socket";
+import type { GameUIState } from "@/client/components/GameUI";
 
 export type PlayerColor = PieceColor | "Spectator";
 
-export type ReRenderFn = (state: GameState, started: boolean, res?: TurnResult) => void;
+export type ReRenderFn = (state: GameUIState, recenter: boolean) => void;

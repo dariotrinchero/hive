@@ -4,8 +4,6 @@ import "@/client/styles/Spinner";
 
 import ConvertCoords from "@/client/utility/convertCoords";
 
-import ViewPort from "@/client/components/ViewPort";
-
 const hexGap = 100 / 18;
 
 const shift = ConvertCoords.hexLatticeToSVG(hexGap, 1, 0);
@@ -15,7 +13,7 @@ const style = `translate: ${shift.join("px ")}px;`
 
 function Spinner(): h.JSX.Element {
     return (
-        <ViewPort viewRange={[8, 8]}>
+        <svg viewBox="-800 -800 1600 1600" width="100%" height="100%">
             <g class="spinner">
                 <use xlinkHref="#rounded-hex" />
                 <use
@@ -24,7 +22,7 @@ function Spinner(): h.JSX.Element {
                     style={style}
                 />
             </g>
-        </ViewPort>
+        </svg>
     );
 }
 

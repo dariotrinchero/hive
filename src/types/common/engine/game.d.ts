@@ -1,6 +1,12 @@
-import type { PieceColor, PieceCount } from "@/types/common/engine/piece";
+import type { ExpansionPieceType, PieceColor, PieceCount } from "@/types/common/engine/piece";
 import type { LatticeCoords } from "@/types/common/engine/hexGrid";
 import type { PathMap } from "@/types/common/engine/graph";
+
+// optional game rules
+export interface OptionalGameRules {
+    noFirstQueen: boolean; // see https://boardgamegeek.com/wiki/page/Hive_FAQ#toc5
+    expansions: Record<ExpansionPieceType, boolean>;
+}
 
 // game state
 export type LastMoveDestination = Record<PieceColor, LatticeCoords | null>;

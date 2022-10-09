@@ -10,6 +10,7 @@ import Routes from "@/server/session/routes";
 
 import type { PieceColor } from "@/types/common/engine/piece";
 import type {
+    ClientSession,
     ClientToServer,
     InterServer,
     ServerToClient,
@@ -27,6 +28,7 @@ import type {
     StartingColor
 } from "@/types/server/gameServer";
 import type { TurnAttempt } from "@/types/common/engine/outcomes";
+import type { OptionalGameRules } from "@/types/common/engine/game";
 
 export default class GameServer {
     private readonly activeGames: ActiveGames = {};
@@ -61,14 +63,14 @@ export default class GameServer {
      * @see createNamespace
      * @param colorAssignmentRule rule specifying how piece colors are assigned to players
      * @param startingColor rule specifying the color to play first
-     * @param noFirstQueen optional tournament rule banning queen bee for first placement
+     * @param rules optional game rules, such as which expansion pieces are used
      * @param gameId specify the ID (and thereby URL) of the new game (default is random UUID)
      * @returns the ID of the newly-created game
      */
     public createGame(
         colorAssignmentRule: ColorAssignmentRule,
         startingColor: StartingColor,
-        noFirstQueen?: boolean,
+        rules?: OptionalGameRules,
         gameId?: string
     ): string {
         gameId ||= uuidv4();
@@ -76,8 +78,7 @@ export default class GameServer {
 
         // TODO make it possible to disable some expansions
         this.activeGames[gameId] = {
-            game: new HiveGame(startingColor),
-            noFirstQueen: noFirstQueen || false,
+            game: new HiveGame(startingColor, rules),
             nsp: this.createNamespace(gameId),
             online: {
                 Player: {},
@@ -86,8 +87,7 @@ export default class GameServer {
             playerColors: {
                 byId: {},
                 rule: colorAssignmentRule
-            },
-            startingColor
+            }
         };
         return gameId;
     }
@@ -225,13 +225,17 @@ export default class GameServer {
         gameDetails.online[clientType][sessionId] = true;
 
         // send new client their session details
-        const bothJoined = Object.keys(gameDetails.online.Player).length > 1;
-        const common = { bothJoined, sessionId, startingColor: gameDetails.startingColor };
-        if (clientType === "Spectator") socket.emit("session", { ...common, spectating: true });
+        const spectatorSession: ClientSession = {
+            bothJoined: Object.keys(gameDetails.online.Player).length > 1,
+            rules: gameDetails.game.getRules(),
+            sessionId,
+            spectating: true,
+            state: gameDetails.game.getState()
+        };
+        if (clientType === "Spectator") socket.emit("session", spectatorSession);
         else socket.emit("session", {
-            ...common,
+            ...spectatorSession,
             color: client.color,
-            noFirstQueen: gameDetails.noFirstQueen,
             spectating: false
         });
 
@@ -239,12 +243,6 @@ export default class GameServer {
         console.log(`${clientType} ${sessionId} connected`);
         void socket.join(gameId);
         socket.to(gameId).emit(`${clientType} connected`);
-
-        // send current game state to new client
-        if (gameDetails.game.getState().turnCount > 0) {
-            const state = gameDetails.game.getState();
-            socket.emit("game state", state, sum(state));
-        }
     }
 
     private handleDisconnection(client: ClientDetails, reason: string): void {
@@ -281,7 +279,7 @@ export default class GameServer {
                 message = "ErrNeedOpponentOnline"; // require both players online for first move
             }
         }
-        if (message) return [{ message, status: "Error", turnType: "Unknown" }, hash];
+        if (message) return [{ message, status: "Err", turnType: "Unknown" }, hash];
 
         // attempt turn
         const result = gameDetails.game.processTurn(req);

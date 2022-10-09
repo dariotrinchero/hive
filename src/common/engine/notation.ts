@@ -1,4 +1,4 @@
-import { Bugs, Colors, pieceInventory } from "@/common/engine/piece";
+import { allBugs, fullInventory, pieceColors } from "@/common/engine/piece";
 
 import type HexGrid from "@/common/engine/hexGrid";
 
@@ -18,11 +18,9 @@ export default class Notation {
      * @returns piece type corresponding to given character
      */
     private static charToPieceType(char: string): PieceType | ParseError {
-        const bugs: string[] = Object.keys(Bugs);
-        const type = bugs.slice(-bugs.length / 2) // first 1/2 of keys are indices
-            .find(bug => bug.charAt(0) === char);
+        const type = allBugs.find(bug => bug.charAt(0) === char);
         if (!type) return "ParseError";
-        return type as PieceType;
+        return type;
     }
 
     /**
@@ -33,11 +31,9 @@ export default class Notation {
      * @returns piece color corresponding to given character
      */
     private static charToPieceColor(char: string): PieceColor | ParseError {
-        const colors: string[] = Object.keys(Colors);
-        const color = colors.slice(-colors.length / 2) // first 1/2 of keys are indices
-            .find(c => c.charAt(0).toLowerCase() === char);
+        const color = pieceColors.find(c => c.charAt(0).toLowerCase() === char);
         if (!color) return "ParseError";
-        return color as PieceColor;
+        return color;
     }
 
     /**
@@ -57,7 +53,7 @@ export default class Notation {
 
         if (notation.length >= 3) {
             const index = parseInt(notation.slice(2), 10);
-            if (isNaN(index) || pieceInventory[type] < index) return "ParseError";
+            if (isNaN(index) || fullInventory[type] < index) return "ParseError";
             return { color, index, type };
         }
 
@@ -72,7 +68,7 @@ export default class Notation {
      */
     public static pieceToString(piece: Piece): string {
         const prefix = `${piece.color.charAt(0).toLowerCase()}${piece.type.charAt(0)}`;
-        if (piece.index && pieceInventory[piece.type] !== 1) return `${prefix}${piece.index}`;
+        if (piece.index && fullInventory[piece.type] !== 1) return `${prefix}${piece.index}`;
         return prefix;
     }
 

@@ -1,4 +1,4 @@
-import { Bugs, pieceInventory } from "@/common/engine/piece";
+import { allBugs, fullInventory } from "@/common/engine/piece";
 
 import type { Piece, PieceColor, PieceType } from "@/types/common/engine/piece";
 import type { Direction, LatticeCoords, PieceToPos, PosToPiece, RelativePosition } from "@/types/common/engine/hexGrid";
@@ -19,7 +19,7 @@ export default abstract class HexGrid {
 
     protected constructor() {
         const emptyRecord = () => Object.fromEntries(
-            Object.keys(Bugs).map(bug => [bug, new Array<LatticeCoords>()])
+            allBugs.map(bug => [bug, new Array<LatticeCoords>()])
         ) as Record<PieceType, LatticeCoords[]>;
         this.pieceToPos = {
             Black: emptyRecord(),
@@ -49,7 +49,7 @@ export default abstract class HexGrid {
     protected getPosOf(piece: Piece): LatticeCoords | undefined {
         const record = this.pieceToPos[piece.color][piece.type];
         if (!piece.index) {
-            if (pieceInventory[piece.type] > 1) return;
+            if (fullInventory[piece.type] > 1) return;
             piece.index = 1;
         }
         if (record.length < piece.index) return;

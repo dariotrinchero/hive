@@ -1,22 +1,30 @@
 import type { PieceColor, PieceCount } from "@/types/common/engine/piece";
 
-export enum Colors {
-    Black,
-    White
-}
+export const pieceColors = [
+    "Black",
+    "White"
+] as const;
 
-export enum Bugs {
-    Ant,
-    Beetle,
-    Grasshopper,
-    Ladybug,
-    Mosquito,
-    Pillbug,
-    QueenBee,
-    Spider
-}
+export const expansionBugs = [
+    "Ladybug",
+    "Mosquito",
+    "Pillbug"
+] as const;
 
-export const pieceInventory: PieceCount = {
+export const baseGameBugs = [
+    "Ant",
+    "Beetle",
+    "Grasshopper",
+    "QueenBee",
+    "Spider"
+] as const;
+
+export const allBugs = [
+    ...baseGameBugs,
+    ...expansionBugs
+] as const;
+
+export const fullInventory: Required<PieceCount> = {
     Ant: 3,
     Beetle: 2,
     Grasshopper: 3,

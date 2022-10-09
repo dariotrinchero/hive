@@ -26,6 +26,8 @@ import Tile, { TileState } from "@/client/components/Tile";
 import ViewPort from "@/client/components/ViewPort";
 
 export interface BoardProps {
+    origin?: LatticeCoords;
+
     // game state
     piecePositions: PosToPiece;
     turnCount: number;
@@ -42,7 +44,11 @@ export interface BoardProps {
     };
 }
 
+// TODO make this a setting
+const viewRange: [number, number] = [5.3, 5.3];
+
 interface SpecialTile {
+    // tile with special state (eg. selected, just placed, shaking, etc)
     piece: Piece;
     pos: LatticeCoords;
     turnType: MoveType; // whether piece is on board / inventory
@@ -57,22 +63,28 @@ interface HoveredPlaceholder {
     type: MovementType;
     pos: LatticeCoords;
 }
-type ShakeKey = number; // used to trigger remount & restart CSS animations
 
 const initHovered: HoveredPlaceholder = { pos: [NaN, NaN], type: "Normal" };
 const initPlaceholders: Placeholders = { options: {} };
 
 export default function Board(props: BoardProps): h.JSX.Element {
-    const [hovered, setHover] = useState<HoveredPlaceholder>(initHovered);
+    const { hexGap } = useContext(UISettingContext);
+    const svgCoords = (p: LatticeCoords) => ConvertCoords.hexLatticeToSVG(hexGap, ...p);
+
+    // placeholder state
+    const [hovered, setHovered] = useState<HoveredPlaceholder>(initHovered);
     const [placeholders, setPlaceholders] = useState<Placeholders>(initPlaceholders);
-    const [special, setSpecial] = useState<SpecialTile>();
-    const [shakeKey, setShakeKey] = useState<ShakeKey>(1);
+
+    // clicked tile state
+    const [specialTile, setSpecialTile] = useState<SpecialTile>();
+    const [shakeKey, setShakeKey] = useState(1); // used to force remount & restart CSS animation
 
     useLayoutEffect(() => {
-        resetState(true);
+        // advance turn by clearing selection & animating last turn
+        clearSelection(true);
         if (props.lastTurn?.status === "Ok" && props.lastTurn.turnType !== "Pass") {
             const { destination, piece, turnType } = props.lastTurn;
-            setSpecial({
+            setSpecialTile({
                 animateFrom: turnType === "Movement" ? props.lastTurn.origin : undefined,
                 piece,
                 pos: destination,
@@ -82,12 +94,15 @@ export default function Board(props: BoardProps): h.JSX.Element {
         }
     }, [props.turnCount, props.lastTurn]);
 
-    const hexDims = useContext(UISettingContext);
-    const svgCoords = (p: LatticeCoords) => ConvertCoords.hexLatticeToSVG(hexDims.hexGap, ...p);
-
-    function resetState(preserveSpecial?: boolean): void {
-        if (!preserveSpecial) setSpecial(undefined);
-        setHover(initHovered);
+    /**
+     * Reset state pertaining to user selections, including placeholders, hovered placeholder,
+     * and special tile (optionally preserving the latter).
+     * 
+     * @param preserveSpecialTile whether to keep the state of the special tile
+     */
+    function clearSelection(preserveSpecialTile?: boolean): void {
+        if (!preserveSpecialTile) setSpecialTile(undefined);
+        setHovered(initHovered);
         setPlaceholders(initPlaceholders);
     }
 
@@ -111,20 +126,20 @@ export default function Board(props: BoardProps): h.JSX.Element {
      * @returns Fragment containing child Placeholder component for each placeholder on board
      */
     function renderPlaceholders(moveType: MoveType): h.JSX.Element | undefined {
-        if (!props.interactivity || special?.turnType !== moveType) return;
+        if (!props.interactivity || specialTile?.turnType !== moveType) return;
         return (
             <Fragment>
                 {HexGrid.entriesOfPosRecord(placeholders.options).map(([pos, type]) => {
                     const handleClick = () => {
-                        props.interactivity?.attemptMove(special.piece, pos, moveType);
-                        resetState();
+                        props.interactivity?.attemptMove(specialTile.piece, pos, moveType);
+                        clearSelection();
                     };
                     return (
                         <Placeholder
                             key={`${pos.join(",")}${type}`}
                             pos={svgCoords(pos)}
                             handleClick={handleClick}
-                            handleMouseEnter={() => setHover({ pos, type })}
+                            handleMouseEnter={() => setHovered({ pos, type })}
                             type={type}
                         />
                     );
@@ -133,19 +148,29 @@ export default function Board(props: BoardProps): h.JSX.Element {
         );
     }
 
+    /**
+     * Handle user clicking tile corresponding to given piece at given position. Specifically,
+     * either select/deselect piece, in the former case retrieving & storing available moves.
+     * Shake tile if attempting to select a tile with no available moves.
+     * 
+     * @param piece piece represented by clicked tile
+     * @param pos position of clicked tile (if on board)
+     * @param moveType move type of which piece is capable (ie. whether it is placed yet)
+     */
     function handleTileClick(piece: Piece, pos: LatticeCoords, moveType: MoveType): void {
         if (!props.interactivity) return;
 
-        if (special?.state === "Selected" && HexGrid.eqPiece(special.piece, piece)) resetState();
+        if (specialTile?.state === "Selected"
+            && HexGrid.eqPiece(specialTile.piece, piece)) clearSelection();
         else {
-            resetState(true);
+            clearSelection(true);
             const { outcome, premove } = props.interactivity.getMoves(piece, moveType);
 
             if (outcome.status === "Ok") {
-                setSpecial({ ...outcome, pos, state: "Selected" });
+                setSpecialTile({ ...outcome, pos, state: "Selected" });
                 setPlaceholders({ ...outcome });
             } else {
-                setSpecial({ ...outcome, piece, pos, state: "Shaking" });
+                setSpecialTile({ ...outcome, piece, pos, state: "Shaking" });
                 setShakeKey((prev: number) => -prev);
                 console.error(`No legal moves; getMoves() gave message: ${outcome.message}`);
             }
@@ -157,23 +182,23 @@ export default function Board(props: BoardProps): h.JSX.Element {
      * 
      * @param piece the piece to render
      * @param pos position of tile (in lattice coordinates)
-     * @param moveType move type piece is capable of (ie. whether it is placed yet)
+     * @param moveType move type of which piece is capable (ie. whether it is placed yet)
      * @param inactive whether tile should be inactive
      * @returns Tile representing given piece at given location
      */
     function renderTile(piece: Piece, pos: LatticeCoords, moveType: MoveType, inactive?: boolean): h.JSX.Element {
         let state: TileState = "Inactive";
         if (props.interactivity && !inactive) {
-            if (special?.turnType === moveType
-                && HexGrid.eqPiece(piece, special.piece)) state = special.state;
-            else if (special?.state !== "Selected" || moveType === "Placement") state = "Normal";
+            if (specialTile?.turnType === moveType
+                && HexGrid.eqPiece(piece, specialTile.piece)) state = specialTile.state;
+            else if (specialTile?.state !== "Selected" || moveType === "Placement") state = "Normal";
         }
         return (
             <Tile
                 key={`${Notation.pieceToString(piece)}${state === "Shaking" ? shakeKey : ""}`}
                 piece={piece}
                 pos={svgCoords(pos)}
-                slideFrom={special?.animateFrom && svgCoords(special.animateFrom)}
+                slideFrom={specialTile?.animateFrom && svgCoords(specialTile.animateFrom)}
                 handleClick={() => handleTileClick(piece, pos, moveType)}
                 state={state}
             />
@@ -196,10 +221,11 @@ export default function Board(props: BoardProps): h.JSX.Element {
         return (
             <Fragment>
                 {HexGrid.entriesOfPosRecord(props.piecePositions).map(([pos, piece]) => {
-                    if (special?.state === "Sliding" && HexGrid.eqPiece(piece, special.piece)) return;
+                    if (specialTile?.state === "Sliding"
+                        && HexGrid.eqPiece(piece, specialTile.piece)) return;
                     return renderTile(piece, pos, "Movement");
                 })}
-                {special?.state === "Sliding" && slidingTile(special)}
+                {specialTile?.state === "Sliding" && slidingTile(specialTile)}
             </Fragment>
         );
     }
@@ -211,10 +237,12 @@ export default function Board(props: BoardProps): h.JSX.Element {
                 <Inventory
                     {...props.interactivity}
                     renderTile={renderInvTile}
-                />}
+                />
+            }
             <ViewPort
-                viewRange={[5.3, 5.3]}
-                panAndZoom={true}
+                viewRange={viewRange}
+                origin={props.origin ? svgCoords(props.origin) : [0, 0]}
+                interactable={props.turnCount > 0}
             >
                 {renderTiles()}
                 {renderPlaceholders("Movement")}

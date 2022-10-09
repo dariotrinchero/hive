@@ -1,12 +1,13 @@
 import { ComponentChildren, h } from "preact";
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import ConvertCoords, { SVGCoords } from "@/client/utility/convertCoords";
 
 export interface ViewPortProps {
-    panAndZoom?: boolean;
     viewRange: [number, number]; // unzoomed, measured in hexagon radii
-    children?: ComponentChildren;
+    children: ComponentChildren;
+    origin: SVGCoords;
+    interactable?: boolean;
 }
 
 interface Transform {
@@ -19,12 +20,21 @@ export default function ViewPort(props: ViewPortProps): h.JSX.Element {
 
     const [dragStart, setDragStart] = useState<SVGCoords>([NaN, NaN]);
     const [transform, setTransform] = useState<Transform>({
-        pan: [ // hex radius is globally fixed to 100
+        pan: [
             -100 * props.viewRange[0],
             -100 * props.viewRange[1]
         ],
         zoom: 1
     });
+
+    useEffect(() => setTransform(transform => ({
+        ...transform,
+        pan: [
+            -100 * props.viewRange[0] + props.origin[0],
+            -100 * props.viewRange[1] + props.origin[1]
+        ]
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    })), [props.origin[0], props.origin[1], props.viewRange[0], props.viewRange[1]]);
 
     /**
      * Get mouse cursor coordinates from given mouse event, in the SVG coordinate system.
@@ -83,7 +93,7 @@ export default function ViewPort(props: ViewPortProps): h.JSX.Element {
     const handleMouseLeave = getHandler(() => [NaN, NaN]);
 
     const vbSize = props.viewRange.map(r => 200 * r / transform.zoom);
-    const handlers = props.panAndZoom ? {
+    const handlers = props.interactable ? {
         onMouseDown: handleMouseDown,
         onMouseLeave: handleMouseLeave,
         onMouseMove: isNaN(dragStart[0]) ? undefined : handlePan,

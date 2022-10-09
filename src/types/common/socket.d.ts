@@ -5,7 +5,7 @@ import type {
     TurnType
 } from "@/types/common/engine/outcomes";
 import type { PieceColor } from "@/types/common/engine/piece";
-import type { LastMoveDestination } from "@/types/common/engine/game";
+import type { LastMoveDestination, OptionalGameRules } from "@/types/common/engine/game";
 import type { PosToPiece } from "@/types/common/engine/hexGrid";
 
 // turn request (client-server-related) error message types
@@ -25,19 +25,17 @@ export type ClientType = "Player" | "Spectator";
 
 interface SessionBase {
     sessionId: string;
-    startingColor: PieceColor;
     bothJoined: boolean; // whether both players have joined
     spectating: boolean;
+    state: GameState;
+    rules: OptionalGameRules;
 }
-
 interface SpectatorSession extends SessionBase {
     spectating: true;
 }
-
 interface PlayerSession extends SessionBase {
     spectating: false;
     color: PieceColor;
-    noFirstQueen: boolean;
 }
 
 export type ClientSession = PlayerSession | SpectatorSession;
@@ -57,7 +55,6 @@ type ConnectionEvents = Record<`${ClientType} ${"dis" | ""}connected`, () => voi
 export interface ServerToClient extends ConnectionEvents {
     "player turn": (result: TurnResult, hash: string) => void;
     "session": (session: ClientSession) => void;
-    "game state": (state: GameState, hash: string) => void;
 }
 
 export interface ClientToServer {

@@ -1,7 +1,7 @@
 import scuttle from "@/client/assets/audio/scuttle.mp3";
 import click from "@/client/assets/audio/click.mp3";
 
-export enum SoundEffect {
+export const enum SoundEffect {
     TileDropping,
     TileSliding,
     InvalidAction,

@@ -1,11 +1,11 @@
-import type { Piece, PieceColor, PieceType } from "@/types/common/engine/piece";
+import type { ExpansionPieceType, Piece, PieceColor, PieceType } from "@/types/common/engine/piece";
 import type { LatticeCoords, RelativePosition } from "@/types/common/engine/hexGrid";
 import type { PathMap } from "@/types/common/engine/graph";
 
 export type MoveType = "Placement" | "Movement";
 export type MovementType = "Normal" | "Pillbug";
 export type TurnType = "Pass" | MoveType;
-type ResultStatus = "Ok" | "Error";
+type ResultStatus = "Ok" | "Err";
 
 // turn type base interfaces
 interface TurnBase { turnType: TurnType; }
@@ -18,7 +18,7 @@ interface MovementBase extends MoveBase { turnType: "Movement"; }
 interface ResultBase { status: ResultStatus; }
 interface OkBase extends ResultBase { status: "Ok"; }
 export interface ErrorBase extends ResultBase {
-    status: "Error";
+    status: "Err";
     message: string;
 }
 
@@ -43,58 +43,61 @@ export type TurnAttempt = GenericTurnAttempt | SpecificTurnAttempt;
 
 // turn attempt / lookup error message types
 type PassErrorMsg =
-    | "ErrValidMovesRemain";
+    | "LegalMovesRemain";
 
 type GetPillbugErrorMsg =
-    | "ErrNoPillbugTouching"
-    | "ErrPillbugMovedLastTurn"
-    | "ErrPillbugCannotTargetStack"
-    | "ErrGateBlocksPillbugMount";
+    | "NoPillbugTouching"
+    | "PillbugJustMoved"
+    | "PillbugCannotTargetStack"
+    | "GateBlocksPillbugMount";
 
-type CommonErrorMsg =
-    | "ErrGameOver";
+export type CommonErrorMsg =
+    | "GameOver"
+    | `${ExpansionPieceType}Omitted`;
+
 type CommonDestErrorMsg =
-    | "ErrInvalidDestination"
-    | "ErrDestinationOccupied";
+    | "InvalidDestination"
+    | "DestinationOccupied";
+
 type OneHiveErrorMsg =
-    | "ErrOneHiveRule";
+    | "OneHiveRule";
 
 export type CanPlaceErrorMsg =
     | CommonErrorMsg
-    | "ErrOutOfTurn"
-    | "ErrOutOfPieces"
-    | "ErrCannotBeQueen" // for optional tournament rule
-    | "ErrMustBeQueen";
+    | "OutOfTurn"
+    | "OutOfPieces"
+    | "MustBeQueen"
+    | "CannotBeQueen"; // for optional tournament rule
 
 export type CanMoveErrorMsg =
     | CommonErrorMsg
     | GetPillbugErrorMsg
     | OneHiveErrorMsg
-    | "ErrQueenUnplayed"
-    | "ErrInvalidMovingPiece"
-    | "ErrCovered"
-    | "ErrPieceMovedLastTurn";
+    | "QueenUnplayed"
+    | "InvalidMovingPiece"
+    | "Covered"
+    | "PieceJustMoved";
 
 type GetPlacementErrorMsg =
     | CanPlaceErrorMsg
-    | "ErrNoValidPlacementTargets";
+    | "NoPlacementTargets";
 
 type GetMovementErrorMsg =
     | CanMoveErrorMsg
-    | "ErrNoValidMoveDestinations";
+    | "NoMoveDestinations";
 
 export type PlacementErrorMsg =
     | CommonDestErrorMsg
     | CanPlaceErrorMsg
     | OneHiveErrorMsg
-    | "ErrTouchesOppColor";
+    | "TouchesOppColor";
 
 export type MovementErrorMsg =
     | CommonDestErrorMsg
     | CanMoveErrorMsg
-    | "ErrAlreadyThere"
-    | "ErrInvalidPillbugAbilityMovement"
-    | `ErrViolates${PieceType}Movement`;
+    | "AlreadyThere"
+    | "InvalidPillbugAbilityMovement"
+    | `Invalid${PieceType}Movement`;
 
 // turn attempt result types
 type PassOk = PassBase & OkBase;
@@ -123,7 +126,7 @@ export type TurnResult = PassResult | MoveResult;
 // legal move lookup query types
 export interface GetMoveQuery extends MoveBase {
     piece: Piece;
-    colorOverride?: PieceColor;
+    currCol?: PieceColor; // override current color to move (for premoves)
 }
 
 // legal move lookup result types

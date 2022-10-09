@@ -1,10 +1,14 @@
-import type { Bugs, Colors } from "@/common/engine/piece";
+import type { allBugs, baseGameBugs, expansionBugs, pieceColors } from "@/common/engine/piece";
 
-export type PieceColor = keyof typeof Colors;
+export type PieceColor = typeof pieceColors[number];
 
-export type PieceType = keyof typeof Bugs;
+export type BaseGamePieceType = typeof baseGameBugs[number];
+export type ExpansionPieceType = typeof expansionBugs[number];
+export type PieceType = typeof allBugs[number];
 
-export type PieceCount = Record<PieceType, number>;
+export type PieceCount =
+    & Record<BaseGamePieceType, number>
+    & Partial<Record<ExpansionPieceType, number>>;
 
 export interface Piece {
     type: PieceType;

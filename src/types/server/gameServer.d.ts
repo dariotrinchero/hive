@@ -26,9 +26,7 @@ export interface GameDetails {
     playerColors: {
         byId: { [sessionId: string]: PieceColor; };
         rule: ColorAssignmentRule;
-    },
-    startingColor: PieceColor;
-    noFirstQueen: boolean;
+    };
 }
 export type ActiveGames = {
     [gameId: string]: GameDetails;
