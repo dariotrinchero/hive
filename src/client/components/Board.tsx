@@ -1,11 +1,12 @@
-import { Fragment, h } from "preact";
+import { Fragment, h, VNode } from "preact";
 import { useContext, useLayoutEffect, useState } from "preact/hooks";
 
 import "@/client/styles/Board";
 
 import type { LatticeCoords, PosToPiece } from "@/types/common/engine/hexGrid";
 import type { PathMap } from "@/types/common/engine/graph";
-import type { Piece, PieceColor, PieceCount } from "@/types/common/engine/piece";
+import type { PlayerInventories } from "@/types/common/engine/game";
+import type { Piece, PieceColor } from "@/types/common/engine/piece";
 import type {
     GetMoveResult,
     MovementType,
@@ -17,6 +18,7 @@ import type {
 import HexGrid from "@/common/engine/hexGrid";
 import Notation from "@/common/engine/notation";
 import ConvertCoords, { SVGCoords } from "@/client/utility/convertCoords";
+import { invertColor } from "@/common/engine/piece";
 
 import { UISettingContext, WithPremove } from "@/client/components/GameUI";
 
@@ -24,6 +26,7 @@ import Inventory from "@/client/components/Inventory";
 import Placeholder from "@/client/components/Placeholder";
 import Tile, { TileState } from "@/client/components/Tile";
 import ViewPort from "@/client/components/ViewPort";
+import Tabs from "@/client/components/Tabs";
 
 export interface BoardProps {
     origin?: LatticeCoords;
@@ -36,7 +39,7 @@ export interface BoardProps {
     interactivity?: {
         // player inventory
         playerColor: PieceColor;
-        inventory: PieceCount;
+        inventory: PlayerInventories;
 
         // click handlers
         getMoves: (piece: Piece, turnType: MoveType) => WithPremove<GetMoveResult>;
@@ -67,7 +70,7 @@ interface HoveredPlaceholder {
 const initHovered: HoveredPlaceholder = { pos: [NaN, NaN], type: "Normal" };
 const initPlaceholders: Placeholders = { options: {} };
 
-export default function Board(props: BoardProps): h.JSX.Element {
+export default function Board(props: BoardProps): VNode {
     const { hexGap } = useContext(UISettingContext);
     const svgCoords = (p: LatticeCoords) => ConvertCoords.hexLatticeToSVG(hexGap, ...p);
 
@@ -111,7 +114,7 @@ export default function Board(props: BoardProps): h.JSX.Element {
      * 
      * @returns SVG path element representing move path
      */
-    function renderMovePath(): h.JSX.Element | undefined {
+    function renderMovePath(): VNode | undefined {
         if (!placeholders.pathMap) return;
         const { pos, type } = hovered;
         const movePath = `M${[pos].concat(placeholders.pathMap(pos))
@@ -123,29 +126,25 @@ export default function Board(props: BoardProps): h.JSX.Element {
      * Render tile for each active placeholder, as long as board is interactive.
      * 
      * @param moveType whether placeholders are for movement or placement selection
-     * @returns Fragment containing child Placeholder component for each placeholder on board
+     * @returns array containing Placeholder component for each placeholder on board
      */
-    function renderPlaceholders(moveType: MoveType): h.JSX.Element | undefined {
-        if (!props.interactivity || specialTile?.turnType !== moveType) return;
-        return (
-            <Fragment>
-                {HexGrid.entriesOfPosRecord(placeholders.options).map(([pos, type]) => {
-                    const handleClick = () => {
-                        props.interactivity?.attemptMove(specialTile.piece, pos, moveType);
-                        clearSelection();
-                    };
-                    return (
-                        <Placeholder
-                            key={`${pos.join(",")}${type}`}
-                            pos={svgCoords(pos)}
-                            handleClick={handleClick}
-                            handleMouseEnter={() => setHovered({ pos, type })}
-                            type={type}
-                        />
-                    );
-                })}
-            </Fragment>
-        );
+    function renderPlaceholders(moveType: MoveType): VNode[] {
+        if (!props.interactivity || specialTile?.turnType !== moveType) return [];
+        return HexGrid.entriesOfPosRecord(placeholders.options).map(([pos, type]) => {
+            const handleClick = () => {
+                props.interactivity?.attemptMove(specialTile.piece, pos, moveType);
+                clearSelection();
+            };
+            return (
+                <Placeholder
+                    key={`${pos.join(",")}${type}`}
+                    pos={svgCoords(pos)}
+                    handleClick={handleClick}
+                    handleMouseEnter={() => setHovered({ pos, type })}
+                    type={type}
+                />
+            );
+        });
     }
 
     /**
@@ -186,7 +185,7 @@ export default function Board(props: BoardProps): h.JSX.Element {
      * @param inactive whether tile should be inactive
      * @returns Tile representing given piece at given location
      */
-    function renderTile(piece: Piece, pos: LatticeCoords, moveType: MoveType, inactive?: boolean): h.JSX.Element {
+    function renderTile(piece: Piece, pos: LatticeCoords, moveType: MoveType, inactive?: boolean): VNode {
         let state: TileState = "Inactive";
         if (props.interactivity && !inactive) {
             if (specialTile?.turnType === moveType
@@ -211,7 +210,7 @@ export default function Board(props: BoardProps): h.JSX.Element {
      * 
      * @returns Fragment containing a child Tile for each piece tile on the board
      */
-    function renderTiles(): h.JSX.Element {
+    function renderTiles(): VNode {
         const slidingTile = ({ piece, pos }: NonNullable<SpecialTile>) => (
             <Fragment>
                 {piece.covering && renderTile(piece.covering, pos, "Movement", true)}
@@ -230,15 +229,57 @@ export default function Board(props: BoardProps): h.JSX.Element {
         );
     }
 
-    const renderInvTile = (piece: Piece) => renderTile(piece, [0, 0], "Placement");
+    /**
+     * Render tabbed board overlay, containing player inventories & move history.
+     * 
+     * @returns absolutely-positioned div containing inventory & history tabs
+     */
+    function renderOverlay(): VNode | undefined {
+        if (!props.interactivity) return;
+        return (
+            <div id="board-overlay">
+                <Tabs
+                    tabDefs={[
+                        {
+                            content: (
+                                <Inventory
+                                    playerColor={props.interactivity.playerColor}
+                                    inventory={props.interactivity.inventory}
+                                    renderTile={renderInvTile}
+                                />
+                            ),
+                            title: "Inventory"
+                        },
+                        {
+                            content: (
+                                <Inventory
+                                    playerColor={invertColor(props.interactivity.playerColor)}
+                                    inventory={props.interactivity.inventory}
+                                    renderTile={renderInvTile}
+                                    inactive={true}
+                                />
+                            ),
+                            title: "Opponent"
+                        },
+                        {
+                            content: (
+                                <h1>
+                                    TODO
+                                </h1>
+                            ),
+                            title: "History"
+                        }
+                    ]}
+                />
+            </div>
+        );
+    }
+
+    const renderInvTile = (piece: Piece, inactive?: boolean) =>
+        renderTile(piece, [0, 0], "Placement", inactive);
     return (
         <div id="board">
-            {props.interactivity &&
-                <Inventory
-                    {...props.interactivity}
-                    renderTile={renderInvTile}
-                />
-            }
+            {renderOverlay()}
             <ViewPort
                 viewRange={viewRange}
                 origin={props.origin ? svgCoords(props.origin) : [0, 0]}

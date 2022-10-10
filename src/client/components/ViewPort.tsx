@@ -1,4 +1,4 @@
-import { ComponentChildren, h } from "preact";
+import { ComponentChildren, h, VNode } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import ConvertCoords, { SVGCoords } from "@/client/utility/convertCoords";
@@ -15,7 +15,7 @@ interface Transform {
     zoom: number;
 }
 
-export default function ViewPort(props: ViewPortProps): h.JSX.Element {
+export default function ViewPort(props: ViewPortProps): VNode {
     const svgRef = useRef<SVGSVGElement>(null);
 
     const [dragStart, setDragStart] = useState<SVGCoords>([NaN, NaN]);

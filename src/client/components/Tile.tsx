@@ -1,4 +1,4 @@
-import { Fragment, h } from "preact";
+import { Fragment, h, VNode } from "preact";
 import { useContext } from "preact/hooks";
 
 import "@/client/styles/Tile";
@@ -20,12 +20,12 @@ export interface TileProps extends BaseTileProps {
 const infoBadgeRadius = 90 / 6;
 const infoBadgeMinInset = 120 / 6;
 
-function Tile(props: TileProps): h.JSX.Element {
+export default function Tile(props: TileProps): VNode {
     const { cornerRad } = useContext(UISettingContext);
 
     const { height, type, color } = props.piece;
 
-    function renderInfoBadge(): h.JSX.Element | undefined {
+    function renderInfoBadge(): VNode | undefined {
         if (!height || height < 2) return;
 
         const sqrt3: number = Math.sqrt(3);
@@ -73,5 +73,3 @@ function Tile(props: TileProps): h.JSX.Element {
         </Fragment>
     );
 }
-
-export default Tile;

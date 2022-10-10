@@ -1,4 +1,4 @@
-import { h } from "preact";
+import { h, VNode } from "preact";
 
 import icons from "@/client/assets/icons.json";
 
@@ -7,7 +7,7 @@ import { useContext, useEffect, useState } from "preact/hooks";
 
 import { UISettingContext } from "@/client/components/GameUI";
 
-function HexDefs(): h.JSX.Element {
+function HexDefs(): VNode {
     const [bugPaths, setBugPaths] = useState<Record<PieceType, string>>();
 
     useEffect(() => {
@@ -48,7 +48,7 @@ function HexDefs(): h.JSX.Element {
      * 
      * @returns Fragment containing a child group containing prototypical placeholder
      */
-    function renderPlaceholderDef(): h.JSX.Element {
+    function renderPlaceholderDef(): VNode {
         return (
             <g id="placeholder">
                 {[0.95, 0.6].map((scale, index) =>

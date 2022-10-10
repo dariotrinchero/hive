@@ -40,6 +40,15 @@ import type {
 import type { BFSAdj, Filter, IsCutVertex, PathMap } from "@/types/common/engine/graph";
 import type { LatticeCoords } from "@/types/common/engine/hexGrid";
 
+/**
+ * Complete implementation of the rules of Hive (documented in included links) with public API
+ * functions to get available moves or make moves. Each such API function returns a rich result
+ * type with details of the enacted move or potential errors.
+ * 
+ * @link https://www.ultraboardgames.com/hive/game-rules.php
+ * @link https://www.ultraboardgames.com/hive/additional-hive-pieces.php
+ * @link https://boardgamegeek.com/wiki/page/Hive_FAQ
+ */
 export default class HiveGame extends HexGrid {
     // graph algorithms
     private static readonly graphUtils = new GraphUtils<LatticeCoords>(pos => pos.join(","));
@@ -145,8 +154,8 @@ export default class HiveGame extends HexGrid {
         return this.rules;
     }
 
-    public getInventory(color: PieceColor): PieceCount {
-        return this.playerInventories[color];
+    public getInventory(): PlayerInventories {
+        return this.playerInventories;
     }
 
     /**

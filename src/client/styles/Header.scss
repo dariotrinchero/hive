@@ -1,19 +1,19 @@
 // region styling
 $background: hsl(220, 6%, 95%);
-$border-bottom: 1px solid hsl(220, 6%, 85%);
+$border-bottom: hsl(220, 6%, 85%);
 
 // text styling
 $text-color: hsl(224, 41%, 29%);
-$font: 90% Arial, Helvetica, sans-serif;
+$font: 90% InterVariable, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+    sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
 
 header {
     font: $font;
     padding: 0px 0px 1em 1em;
-    display: inline;
     position: sticky;
     color: $text-color;
     background: $background;
-    border-bottom: $border-bottom;
+    border-bottom: 1px solid $border-bottom;
     z-index: 50;
 
     h2 {

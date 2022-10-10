@@ -1,4 +1,4 @@
-import { createContext, h } from "preact";
+import { createContext, h, VNode } from "preact";
 import { useRef, useState } from "preact/hooks";
 
 import "@/client/styles/GameUI";
@@ -36,7 +36,7 @@ interface UISettings {
 const initUISettings: UISettings = { cornerRad: 100 / 6, hexGap: 100 / 18 };
 export const UISettingContext = createContext<UISettings>(initUISettings);
 
-export default function GameUI() {
+export default function GameUI(): VNode {
     const gameClient = useRef<GameClient>(new GameClient(
         (state, recenter) => {
             if (recenter) setBoardOrigin(averagePos(state.posToPiece));
@@ -87,7 +87,7 @@ export default function GameUI() {
         ? {
             attemptMove,
             getMoves: getMoves(playerColor),
-            inventory: gameClient.current.game.getInventory(playerColor),
+            inventory: gameClient.current.game.getInventory(),
             playerColor
         } : undefined;
 

@@ -8,8 +8,14 @@ import type { Direction } from "@/types/common/engine/hexGrid";
 
 export type ParseError = "ParseError";
 
+/**
+ * Utility class implementing static functions for converting to/from official Hive notation,
+ * as documented in included links.
+ * 
+ * @link https://entomology.gitlab.io/notation.html
+ * @link https://www.boardspace.net/english/about_hive_notation.html
+ */
 export default class Notation {
-
     /**
      * Convert a piece character into the corresponding piece type;
      * eg. "B" -> Beetle, "G" -> Grasshopper, etc
@@ -79,7 +85,7 @@ export default class Notation {
      *          destination: { referencePiece: [black ant 1], direction: "o-" }
      *      }
      * 
-     * @param notation "pass" or 2-word string encoding moving piece & location (relative to reference piece)
+     * @param notation "pass" or 2-word string encoding moving piece & location (using reference piece)
      * @returns turn attempt object corresponding to given turn notation
      */
     public static stringToGenericTurn(notation: string): GenericTurnAttempt | ParseError {

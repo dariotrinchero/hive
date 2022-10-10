@@ -1,4 +1,4 @@
-import { h } from "preact";
+import { h, VNode } from "preact";
 
 import "@/client/styles/Spinner";
 
@@ -11,7 +11,7 @@ const pivot = ConvertCoords.hexLatticeToSVG(hexGap, -2 / 3, 1 / 3);
 const style = `translate: ${shift.join("px ")}px;`
     + `transform-origin: ${pivot.join("px ")}px`;
 
-function Spinner(): h.JSX.Element {
+function Spinner(): VNode {
     return (
         <svg viewBox="-800 -800 1600 1600" width="100%" height="100%">
             <g class="spinner">

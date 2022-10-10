@@ -1,4 +1,4 @@
-import { h } from "preact";
+import { h, VNode } from "preact";
 
 import "@/client/styles/Placeholder";
 
@@ -13,7 +13,7 @@ export interface PlaceholderProps extends BaseTileProps {
 const mouseDown = (e: MouseEvent) =>
     e.stopImmediatePropagation(); // prevent interfering with parent component
 
-function Placeholder(props: PlaceholderProps): h.JSX.Element {
+function Placeholder(props: PlaceholderProps): VNode {
     return (
         <use
             class={`placeholder ${props.type}`}

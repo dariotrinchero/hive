@@ -19,6 +19,12 @@ const sfxToUrl = [
 
 const defaultGain = 0.3; // TODO set this to something sensible
 
+/**
+ * Simple utility class to load & play sound effects on demand. Implemented using Web
+ * Audio API, documentation for which is linked. 
+ * 
+ * @link https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API
+ */
 export default abstract class AudioPlayer {
     private static audioContext: AudioContext;
     private static initialized = false;
@@ -45,7 +51,8 @@ export default abstract class AudioPlayer {
     }
 
     /**
-     * Play given sound effect at given volume. Automatically runs initialization if needed.
+     * Play given sound effect at given volume, automatically initializing if needed.
+     * Note that "An AudioBufferSourceNode can only be played once;"
      * 
      * @param sound the sound effect to play
      * @param volume optional value to which to set audio gain before playing sound

@@ -8,7 +8,14 @@ import type {
     Stringify
 } from "@/types/common/engine/graph";
 
-
+/**
+ * Utility class containing static functions implementing graph algorithms helpful for generating /
+ * validating Hive moves. Included is breadth-first-search to find shortest paths, an algorithm to
+ * find paths of specified length N, and Tarjan & Hopcroft algorithm for finding cut vertices.
+ * 
+ * Results are generated online where possible to allow caller logic to short-circuit algorithms;
+ * we thus also include methods to merge resulting generators & path maps.
+ */
 export default class GraphUtils<V> {
     private readonly stringify: Stringify<V>;
 
@@ -199,9 +206,9 @@ export default class GraphUtils<V> {
 
     /**
      * Find all 'cut vertices' - ie. vertices whose removal increases the number of connected components
-     * of graph (as opposed to 'biconnected' vertices) - using algorithm by Tarjan & Hopcroft
-     * (see https://en.wikipedia.org/wiki/Biconnected_component).
+     * of graph (as opposed to 'biconnected' vertices) - using algorithm by Tarjan & Hopcroft (see link).
      * 
+     * @link https://en.wikipedia.org/wiki/Biconnected_component
      * @param source any vertex in graph at which to begin search
      * @param adj adjacency function defining graph
      * @returns function to test whether given vertex is a cut vertex (connected to source vertex)

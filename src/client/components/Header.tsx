@@ -1,4 +1,4 @@
-import { h } from "preact";
+import { h, VNode } from "preact";
 
 import "@/client/styles/Header";
 
@@ -11,7 +11,7 @@ export interface HeaderProps {
     currTurnColor: PieceColor;
 }
 
-export default function Header(props: HeaderProps): h.JSX.Element {
+export default function Header(props: HeaderProps): VNode {
     return (
         <header>
             <h2>{props.started ? props.playerColor : "...waiting for opponent"}</h2>

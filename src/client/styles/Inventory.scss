@@ -1,35 +1,11 @@
 // dimensions
-$width: 15%;
-$height: 60%;
 $max-piece-width: 110px;
-
 $h-padding: 30px;
-$margin: 15px;
-
-$border-rad: 8px;
-
-// inventory colors
-$border: 1px solid hsl(220, 6%, 85%); // TODO same as header
-$background: hsla(220, 6%, 95%, 0.92); // TODO same as header
+$v-padding: 15px;
 
 div#inventory-panel {
-    width: $width;
-    height: $height;
-    position: absolute;
-
-    margin: $margin;
-    padding: 0px $h-padding;
-    overflow: auto;
-
-    background: $background;
-    border: $border;
-    border-radius: 0px 0px $border-rad $border-rad;
-
+    padding: $v-padding $h-padding;
     display: grid;
-
-    // center whole grid vertically; note 'safe' might not be supported:
-    // https://stackoverflow.com/questions/33454533/cant-scroll-to-top-of-flex-item-that-is-overflowing-container
-    align-content: safe center;
 
     // determine columns # by screen width; add rows as needed
     grid-template-columns: repeat(auto-fill, minmax(min($max-piece-width, 100%), 1fr));

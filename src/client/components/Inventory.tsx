@@ -1,31 +1,37 @@
-import { h } from "preact";
+import { h, VNode } from "preact";
 
 import "@/client/styles/Inventory";
 
 import type {
     Piece,
     PieceColor,
-    PieceCount,
     PieceType
 } from "@/types/common/engine/piece";
+import type { PlayerInventories } from "@/types/common/engine/game";
 
 export interface InventoryProps {
     playerColor: PieceColor;
-    inventory: PieceCount;
-    renderTile: (piece: Piece) => h.JSX.Element;
+    inventory: PlayerInventories;
+    inactive?: boolean;
+    renderTile: (piece: Piece, inactive?: boolean) => VNode;
 }
 
-function Inventory(props: InventoryProps): h.JSX.Element {
+function Inventory(props: InventoryProps): VNode {
     return (
         <div id="inventory-panel">
-            {Object.entries(props.inventory).map(([type, amount]) => {
+            {Object.entries(props.inventory[props.playerColor]).map(([type, amount]) => {
                 if (amount > 0) return (
-                    <svg viewBox={"-100 -100 200 200"}>
-                        {props.renderTile({
-                            color: props.playerColor,
-                            height: amount,
-                            type: type as PieceType
-                        })}
+                    <svg
+                        viewBox={"-103 -103 206 206"} // TODO must be adjusted to fit Tile stroke width
+                    >
+                        {props.renderTile(
+                            {
+                                color: props.playerColor,
+                                height: amount,
+                                type: type as PieceType
+                            },
+                            props.inactive
+                        )}
                     </svg>
                 );
             })}

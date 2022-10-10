@@ -10,7 +10,7 @@ $pillbug-fill: hsla(164, 41%, 48%, 0.467);
 .placeholder {
     stroke: $normal-stroke;
     stroke-width: $stroke-width;
-    fill: hsla(0, 0%, 100%, 0); // fill with transparency to detect hover
+    fill: transparent; // fill with transparency to detect hover
 
     &:hover {
         fill: $normal-fill;

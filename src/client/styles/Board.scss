@@ -1,3 +1,10 @@
+// play area color
+$background: hsl(0, 0%, 98%);
+
+// board overlay dimensions
+$width: 18%;
+$margin: 1rem;
+
 // move path configuration
 $dashon: 22;
 $dashoff: 30;
@@ -6,8 +13,34 @@ $stroke-width: 11px;
 $normal-stroke: hsla(295, 86%, 62%, 0.7);
 $pillbug-stroke: hsla(164, 50%, 50%, 0.8);
 
-// play area color
-$background: hsl(0, 0%, 98%);
+div#board {
+    display: flex;
+    position: relative;
+    background: $background;
+    width: 100vw;
+    height: 0%;
+    flex-grow: 1;
+
+    div#board-overlay {
+        display: flex;
+        flex-flow: column nowrap;
+        width: $width;
+        min-width: min-content;
+        pointer-events: none;
+
+        position: absolute;
+        left: $margin;
+        top: $margin;
+        bottom: $margin;
+
+        &>* {
+            flex-grow: 1;
+            display: flex;
+            flex-flow: column nowrap;
+            min-height: 0;
+        }
+    }
+}
 
 .move-path {
     stroke: $normal-stroke;
@@ -22,13 +55,6 @@ $background: hsl(0, 0%, 98%);
     &.Pillbug {
         stroke: $pillbug-stroke;
     }
-}
-
-div#board {
-    display: flex;
-    background: $background;
-    height: 10%;
-    flex-grow: 1;
 }
 
 @keyframes dashflow {
