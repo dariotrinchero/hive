@@ -9,10 +9,9 @@ export interface TabsProps {
         content: ComponentChildren;
     }[];
     initial?: number; // initial tab index
+    collapseAt?: string;
+    noFrame?: boolean;
 }
-
-// TODO make it a setting to always allow collapsing?
-const collapseQuery = "only screen and (max-width: 500px)";
 
 /**
  * Renders collection of tabs with given titles & content. Respects ARIA accessibility
@@ -27,14 +26,18 @@ export default function Tabs(props: TabsProps): VNode {
     const [expanding, setExpanding] = useState(false);
 
     useEffect(() => {
-        const query = window.matchMedia(collapseQuery);
-        setCollapsed(query.matches || undefined);
-        query.addEventListener("change", (e: MediaQueryListEvent) =>
-            setCollapsed(e.matches || undefined));
-    }, []);
+        if (props.collapseAt) {
+            const query = window.matchMedia(`all and (max-width:${props.collapseAt})`);
+            const listener = (e: MediaQueryListEvent) => setCollapsed(e.matches || undefined);
+            setCollapsed(query.matches || undefined);
+            query.addEventListener("change", listener);
+            return () => query.removeEventListener("change", listener);
+        }
+    }, [props.collapseAt]);
 
     function handleTabClick(index: number): void {
-        if (activeTab === index && typeof collapsed !== "undefined" && !collapsed) setCollapsed(true);
+        if (activeTab === index && typeof collapsed !== "undefined"
+            && !collapsed) setCollapsed(true);
         else {
             setActiveTab(index);
             if (collapsed) {
@@ -77,13 +80,17 @@ export default function Tabs(props: TabsProps): VNode {
                 class={collapsed ? "collapsed" : expanding ? "expanding" : ""}
                 hidden={activeTab !== index}
             >
-                {tab.content}
+                <div>
+                    {tab.content}
+                </div>
             </section>
         ));
     }
 
     return (
-        <div class="tabs">
+        <div
+            class={`tabs ${props.noFrame ? "inner" : ""}`}
+        >
             <ul role="tablist">
                 {renderTabHeaders()}
             </ul>

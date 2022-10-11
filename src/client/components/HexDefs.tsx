@@ -64,7 +64,11 @@ function HexDefs(): VNode {
     }
 
     return (
-        <svg width={0} height={0}>
+        <svg
+            width={0}
+            height={0}
+            aria-hidden
+        >
             <defs>
                 <path
                     id="rounded-hex"

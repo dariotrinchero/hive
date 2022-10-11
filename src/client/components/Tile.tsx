@@ -47,9 +47,12 @@ export default function Tile(props: TileProps): VNode {
         );
     }
 
-    const mouseDown = (e: MouseEvent) => {
-        e.stopImmediatePropagation(); // prevent interfering with parent component
+    const mouseDown = (e?: MouseEvent) => {
+        e?.stopImmediatePropagation();
         if (props.state !== "Inactive" && props.handleClick) props.handleClick();
+    };
+    const keyDown = (e: KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") mouseDown();
     };
     const translate = `translate: ${props.pos.join("px ")}px`;
 
@@ -65,6 +68,11 @@ export default function Tile(props: TileProps): VNode {
                 class={`tile ${props.state}`}
                 style={translate}
                 onMouseDown={props.handleClick && mouseDown}
+                role="button"
+                onKeyDown={props.handleClick && keyDown}
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore (see https://github.com/preactjs/preact/issues/1061)
+                tabindex={props.state !== "Inactive" ? 0 : -1}
             >
                 <use xlinkHref="#rounded-hex" class={color} />
                 <use xlinkHref={`#${type}`} />

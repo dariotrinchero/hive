@@ -239,6 +239,7 @@ export default function Board(props: BoardProps): VNode {
         return (
             <div id="board-overlay">
                 <Tabs
+                    collapseAt="30em"
                     tabDefs={[
                         {
                             content: (
@@ -252,14 +253,15 @@ export default function Board(props: BoardProps): VNode {
                         },
                         {
                             content: (
-                                <Inventory
-                                    playerColor={invertColor(props.interactivity.playerColor)}
-                                    inventory={props.interactivity.inventory}
-                                    renderTile={renderInvTile}
-                                    inactive={true}
-                                />
+                                <a
+                                    href="something"
+                                    role="button"
+                                    class="button1"
+                                >
+                                    Concede
+                                </a>
                             ),
-                            title: "Opponent"
+                            title: "History"
                         },
                         {
                             content: (
@@ -267,7 +269,7 @@ export default function Board(props: BoardProps): VNode {
                                     TODO
                                 </h1>
                             ),
-                            title: "History"
+                            title: "Chat"
                         }
                     ]}
                 />

@@ -10,10 +10,13 @@ export interface PlaceholderProps extends BaseTileProps {
     handleMouseEnter?: () => void;
 }
 
-const mouseDown = (e: MouseEvent) =>
-    e.stopImmediatePropagation(); // prevent interfering with parent component
+const mouseDown = (e: MouseEvent) => e.stopImmediatePropagation();
 
 function Placeholder(props: PlaceholderProps): VNode {
+    const keyDown = (e: KeyboardEvent) => {
+        if ((e.key === "Enter" || e.key === " ") && props.handleClick) props.handleClick();
+    };
+
     return (
         <use
             class={`placeholder ${props.type}`}
@@ -22,6 +25,10 @@ function Placeholder(props: PlaceholderProps): VNode {
             onMouseDown={mouseDown}
             onMouseUp={props.handleClick}
             onMouseEnter={props.handleMouseEnter}
+            onKeyDown={keyDown}
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore (see https://github.com/preactjs/preact/issues/1061)
+            tabindex={0}
         />
     );
 }

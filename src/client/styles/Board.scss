@@ -2,7 +2,7 @@
 $background: hsl(0, 0%, 98%);
 
 // board overlay dimensions
-$width: 18%;
+$width: 25%;
 $margin: 1rem;
 
 // move path configuration
@@ -64,5 +64,35 @@ div#board {
 
     to {
         stroke-dashoffset: $dashon + $dashoff;
+    }
+}
+
+a.button1 {
+    display: inline-block;
+    padding: 0.35em 1.2em;
+    border: 0.1em solid hsl(224, 41%, 29%);
+    margin: 0 0.3em 0.3em 0;
+    border-radius: 5px;
+    box-sizing: border-box;
+    text-decoration: none;
+    font-family: InterVariable, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+        sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-weight: 300;
+    color: hsl(224, 41%, 29%);
+    text-align: center;
+    background-color: transparent;
+    transition-property: background-color, color;
+    transition-duration: 150ms;
+}
+
+a.button1:hover {
+    color: #FFF;
+    background-color: hsl(224, 41%, 29%);
+}
+
+@media all and (max-width:30em) {
+    a.button1 {
+        display: block;
+        margin: 0.4em auto;
     }
 }
