@@ -1,3 +1,10 @@
+// board overlay dimensions
+$width: 25%;
+$margin: 1rem;
+
+// play area color
+$background: hsl(0, 0%, 98%);
+
 body,
 html {
     display: flex;
@@ -6,4 +13,63 @@ html {
     padding: 0px;
     margin: 0px;
     // overflow: hidden; // TODO delete this if unneeded
+}
+
+div#play-area {
+    display: flex;
+    position: relative;
+    background: $background;
+    width: 100vw;
+    height: 0%;
+    flex-grow: 1;
+
+    div#overlay {
+        display: flex;
+        flex-flow: column nowrap;
+        width: $width;
+        min-width: min-content;
+        pointer-events: none;
+    
+        position: absolute;
+        left: $margin;
+        top: $margin;
+        bottom: $margin;
+    
+        &>* {
+            flex-grow: 1;
+            display: flex;
+            flex-flow: column nowrap;
+            min-height: 0;
+        }
+    }
+}
+
+a.button1 {
+    display: inline-block;
+    padding: 0.35em 1.2em;
+    border: 0.1em solid hsl(224, 41%, 29%);
+    margin: 0 0.3em 0.3em 0;
+    border-radius: 5px;
+    box-sizing: border-box;
+    text-decoration: none;
+    font-family: InterVariable, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+        sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-weight: 300;
+    color: hsl(224, 41%, 29%);
+    text-align: center;
+    background-color: transparent;
+    transition-property: background-color, color;
+    transition-duration: 150ms;
+}
+
+a.button1:hover {
+    color: #FFF;
+    background-color: hsl(224, 41%, 29%);
+}
+
+@media all and (max-width:30em) {
+    a.button1 {
+        display: block;
+        margin: 0.4em auto;
+    }
 }

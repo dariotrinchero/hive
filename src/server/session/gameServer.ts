@@ -215,14 +215,10 @@ export default class GameServer {
     private handleConnection(client: ClientDetails): void {
         const { clientType, gameDetails, gameId, sessionId, socket } = client;
 
-        // deny multiple connections from same session ID
-        if (gameDetails.online[clientType][sessionId]) {
-            // TODO should this be denied? Maybe we could just keep count?
-            // Either way, notify user before disconnecting...
-            socket.disconnect();
-            return;
-        }
-        gameDetails.online[clientType][sessionId] = true;
+        // register client as online
+        if (typeof gameDetails.online[clientType][sessionId] === "undefined")
+            gameDetails.online[clientType][sessionId] = 0;
+        gameDetails.online[clientType][sessionId]++;
 
         // send new client their session details
         const spectatorSession: ClientSession = {
@@ -249,7 +245,8 @@ export default class GameServer {
         const { clientType, gameDetails, gameId, sessionId, socket } = client;
         console.log(`${clientType} ${sessionId} disconnected for reason ${reason}`);
         socket.to(gameId).emit(`${clientType} disconnected`);
-        gameDetails.online[clientType][sessionId] = false;
+        if (gameDetails.online[clientType][sessionId])
+            gameDetails.online[clientType][sessionId]--;
 
         // TODO delete game after a while if both players disconnect
     }

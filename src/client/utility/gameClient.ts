@@ -6,7 +6,7 @@ import AudioPlayer, { SoundEffect } from "@/client/utility/audioPlayer";
 import sum from "@/common/objectHash";
 import HiveGame from "@/common/engine/game";
 
-import type { PlayerColor, ReRenderFn } from "@/types/client/gameClient";
+import type { ClientColor, ReRenderFn } from "@/types/client/gameClient";
 import type { ClientToServer, GameState, ServerToClient, TurnRequestResult } from "@/types/common/socket";
 import type { GenericTurnAttempt, SpecificTurnAttempt, TurnAttempt, TurnResult } from "@/types/common/engine/outcomes";
 import type { OptionalGameRules } from "@/types/common/engine/game";
@@ -20,7 +20,7 @@ export default class GameClient {
 
     // game-related
     public game: HiveGame = new HiveGame();
-    private playerColor: PlayerColor;
+    private playerColor: ClientColor;
     private bothJoined: boolean;
 
     // pending premove
@@ -42,18 +42,16 @@ export default class GameClient {
         );
 
         this.socket = io(document.location.pathname, {
-            auth: { sessionId: localStorage.getItem(localStorageSessionIdName) }
+            auth: { sessionId: localStorage.getItem(localStorageSessionIdName) },
+            autoConnect: false
         });
         this.bindSocketEvents();
+        this.socket.connect();
     }
 
-    public getPlayerColor(): PlayerColor { return this.playerColor; }
+    public getPlayerColor(): ClientColor { return this.playerColor; }
 
     private bindSocketEvents() {
-        this.socket.on("connect", () => {
-            // TODO do anything here?
-        });
-
         this.socket.prependAny((...args) => console.log(args)); // TODO for dev debugging only
 
         this.socket.on("session", session => {

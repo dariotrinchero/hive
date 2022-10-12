@@ -2,12 +2,12 @@ import { h, VNode } from "preact";
 
 import "@/client/styles/Header";
 
-import type { PlayerColor } from "@/types/client/gameClient";
+import type { ClientColor } from "@/types/client/gameClient";
 import type { PieceColor } from "@/types/common/engine/piece";
 
 export interface HeaderProps {
     started: boolean;
-    playerColor: PlayerColor;
+    playerColor: ClientColor;
     currTurnColor: PieceColor;
 }
 

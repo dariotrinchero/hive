@@ -6,7 +6,7 @@ import type { PieceColor } from "@/types/common/engine/piece";
 import type { ClientToServer, ClientType, InterServer, ServerToClient, SocketData } from "@/types/common/socket";
 
 export type OnlineSessions = {
-    [sessionId: string]: boolean;
+    [sessionId: string]: number; // counts # connections client has open
 };
 
 // starting color & color assignment
