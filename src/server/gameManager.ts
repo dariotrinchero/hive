@@ -1,55 +1,37 @@
-import express from "express";
-import { createServer, Server as HTTPServer } from "http";
-import { Server } from "socket.io";
 import { randomUUID as uuidv4 } from "node:crypto";
 
 import sum from "@/common/objectHash";
 import { invertColor } from "@/common/engine/piece";
 import HiveGame from "@/common/engine/game";
-import Routes from "@/server/session/routes";
+import Routes from "@/common/routes";
 
 import type { PieceColor } from "@/types/common/engine/piece";
 import type {
     ClientSession,
-    ClientToServer,
-    InterServer,
-    ServerToClient,
-    SocketData,
     TurnRequestErrorMsg,
     TurnRequestResult
 } from "@/types/common/socket";
 import type {
-    ActiveGames,
     ClientDetails,
     ColorAssignmentRule,
     GameDetails,
     IONamespace,
+    IOServer,
     IOSocket,
     StartingColor
-} from "@/types/server/gameServer";
+} from "@/types/server/gameManager";
 import type { TurnAttempt } from "@/types/common/engine/outcomes";
 import type { OptionalGameRules } from "@/types/common/engine/game";
 
-export default class GameServer {
-    private readonly activeGames: ActiveGames = {};
-    private readonly httpServer: HTTPServer;
-    private readonly io: Server<ClientToServer, ServerToClient, InterServer, SocketData>;
+export default class GameManager {
+    private readonly io: IOServer;
+    private readonly activeGames: {
+        [gameId: string]: GameDetails;
+    };
 
-    public constructor(staticAssetPath: string, port: number) {
-        const app = express();
-        this.httpServer = createServer(app);
-        this.io = new Server(this.httpServer);
-
-        // set up middleware to validate game ID & serve static assets
-        app.get(Routes.getGameRoute(":gameId"), (request, _response, next) => {
-            if (!this.activeGames[request.params.gameId]) return next("No such game ID.");
-            return next();
-        });
-        app.use(Routes.getGameRoute(":gameId"), express.static(staticAssetPath));
-
-        // listen on port
-        this.httpServer.listen(port, () =>
-            console.log(`serving & listening on port ${port}`));
+    public constructor(io: IOServer) {
+        this.activeGames = {};
+        this.io = io;
     }
 
     // ===================================================================================================
@@ -63,22 +45,23 @@ export default class GameServer {
      * @see createNamespace
      * @param colorAssignmentRule rule specifying how piece colors are assigned to players
      * @param startingColor rule specifying the color to play first
-     * @param rules optional game rules, such as which expansion pieces are used
-     * @param gameId specify the ID (and thereby URL) of the new game (default is random UUID)
-     * @returns the ID of the newly-created game
+     * @param gameRules optional game rules, such as which expansion pieces are used
+     * @param gameId specify ID (and thereby URL) of new game (default is random UUID)
+     * @returns ID of newly-created game
      */
     public createGame(
         colorAssignmentRule: ColorAssignmentRule,
         startingColor: StartingColor,
-        rules?: OptionalGameRules,
+        gameRules?: OptionalGameRules,
         gameId?: string
     ): string {
+        if (gameId && this.gameExists(gameId)) return gameId; // bypass creation if game already exists
+
         gameId ||= uuidv4();
         if (startingColor === "Random") startingColor = Math.random() <= 0.5 ? "Black" : "White";
 
-        // TODO make it possible to disable some expansions
         this.activeGames[gameId] = {
-            game: new HiveGame(startingColor, rules),
+            game: new HiveGame(startingColor, gameRules),
             nsp: this.createNamespace(gameId),
             online: {
                 Player: {},
@@ -97,13 +80,29 @@ export default class GameServer {
      * listeners, then remove all game details from list of active games.
      * 
      * @param gameId UUID of game to delete
+     * @returns true if game existed & was successfuly deleted; false otherwise
      */
-    public deleteGame(gameId: string): void {
+    public deleteGame(gameId: string): boolean {
+        if (typeof this.activeGames[gameId] === "undefined") return false;
         const nsp = this.activeGames[gameId].nsp;
+
         nsp.disconnectSockets();
         nsp.removeAllListeners();
-        this.io._nsps.delete(Routes.getGameRoute(gameId));
+        const deleted = this.io._nsps.delete(Routes.joinGame(gameId));
+        if (!deleted) return false;
+
         delete this.activeGames[gameId];
+        return true;
+    }
+
+    /**
+     * Check whether game with given ID exists.
+     * 
+     * @param gameId UUID of game to lookup
+     * @returns whether any active games have given game ID
+     */
+    public gameExists(gameId: string): boolean {
+        return typeof this.activeGames[gameId] !== "undefined";
     }
 
     // ===================================================================================================
@@ -119,7 +118,7 @@ export default class GameServer {
      * @returns the newly-created Socket.io namespace
      */
     private createNamespace(gameId: string): IONamespace {
-        const nsp = this.io.of(Routes.getGameRoute(gameId));
+        const nsp = this.io.of(Routes.joinGame(gameId));
         nsp.use((socket, next) => { // socket middleware to inject user session ID
             const sessionId = socket.handshake.auth.sessionId as string | null;
             socket.data.sessionId = sessionId || uuidv4();
@@ -152,21 +151,20 @@ export default class GameServer {
     }
 
     /**
-     * Determine the color of the player with given session ID, either directly from game details
-     * (if game already has session IDs associated with colors, such as for a player who momentarily
-     * disconnected then rejoined), or using the color assignment rule specified on game creation.
+     * Determine color of player with given session ID, either directly from game details (if game
+     * already has session IDs associated with colors, such as for player who momentarily disconnected
+     * then rejoined), or using color assignment rule specified on game creation.
      * 
-     * @param playerColors record of assigned player colors, and assignment rule for new sessions
+     * @param playerColors record of assigned player colors & assignment rule for new sessions
      * @param sessionId UUID identifying player (stored in their browser session)
-     * @returns the color associated with given player
+     * @returns color associated with given player
      */
     private assignPlayerColor(playerColors: GameDetails["playerColors"], sessionId: string): PieceColor {
         const colorById = playerColors.byId;
         if (colorById[sessionId]) return colorById[sessionId];
 
-        // This client has not joined previously (as colorById[sessionId] is unset)
-        // & only one other could have joined (as this client is a "Player");
-        // hence this suffices to test for the second player:
+        // This client is a "Player" & has not joined previously (colorById[sessionId] is unset);
+        // hence this suffices to test for second player:
         const isSecondPlayer = Object.keys(colorById).length !== 0;
 
         let color: PieceColor;
@@ -236,14 +234,14 @@ export default class GameServer {
         });
 
         // join game room & notify any other members
-        console.log(`${clientType} ${sessionId} connected`);
+        console.log(`${clientType} ${sessionId} joined game ${gameId}`);
         void socket.join(gameId);
         socket.to(gameId).emit(`${clientType} connected`);
     }
 
     private handleDisconnection(client: ClientDetails, reason: string): void {
         const { clientType, gameDetails, gameId, sessionId, socket } = client;
-        console.log(`${clientType} ${sessionId} disconnected for reason ${reason}`);
+        console.log(`${clientType} ${sessionId} left game ${gameId} for reason ${reason}`);
         socket.to(gameId).emit(`${clientType} disconnected`);
         if (gameDetails.online[clientType][sessionId])
             gameDetails.online[clientType][sessionId]--;

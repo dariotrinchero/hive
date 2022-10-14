@@ -1,7 +1,7 @@
 import { Fragment, h, VNode } from "preact";
 import { useContext, useLayoutEffect, useState } from "preact/hooks";
 
-import "@/client/styles/Board";
+import "@/client/styles/components/Board";
 
 import type { LatticeCoords, PosToPiece } from "@/types/common/engine/hexGrid";
 import type { Piece } from "@/types/common/engine/piece";
@@ -10,7 +10,7 @@ import type { MovementType } from "@/types/common/engine/outcomes";
 import HexGrid from "@/common/engine/hexGrid";
 import ConvertCoords from "@/client/utility/convertCoords";
 
-import { Placeholders, UISettingContext } from "@/client/components/GameUI";
+import { Placeholders, UISettingContext } from "@/client/pages/GamePage";
 
 import Placeholder from "@/client/components/Placeholder";
 import ViewPort from "@/client/components/ViewPort";

@@ -1,6 +1,6 @@
 import { h, VNode } from "preact";
 
-import "@/client/styles/Placeholder";
+import "@/client/styles/components/Placeholder";
 
 import type { BaseTileProps } from "@/types/client/tile";
 import type { MovementType } from "@/types/common/engine/outcomes";
@@ -10,10 +10,10 @@ export interface PlaceholderProps extends BaseTileProps {
     handleMouseEnter?: () => void;
 }
 
-const mouseDown = (e: MouseEvent) => e.stopImmediatePropagation();
+const mouseDown = (e: h.JSX.TargetedMouseEvent<SVGUseElement>) => e.stopImmediatePropagation();
 
 function Placeholder(props: PlaceholderProps): VNode {
-    const keyDown = (e: KeyboardEvent) => {
+    const keyDown = (e: h.JSX.TargetedKeyboardEvent<SVGUseElement>) => {
         if ((e.key === "Enter" || e.key === " ") && props.handleClick) props.handleClick();
     };
 

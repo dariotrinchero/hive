@@ -1,6 +1,6 @@
 import { h, VNode } from "preact";
 
-import "@/client/styles/Spinner";
+import "@/client/styles/components/Spinner";
 
 import ConvertCoords from "@/client/utility/convertCoords";
 

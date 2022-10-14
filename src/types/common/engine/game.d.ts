@@ -3,6 +3,7 @@ import type { LatticeCoords } from "@/types/common/engine/hexGrid";
 import type { PathMap } from "@/types/common/engine/graph";
 
 // optional game rules
+// NOTE when changing this type, we MUST update RequestValidator
 export interface OptionalGameRules {
     noFirstQueen: boolean; // see https://boardgamegeek.com/wiki/page/Hive_FAQ#toc5
     expansions: Record<ExpansionPieceType, boolean>;

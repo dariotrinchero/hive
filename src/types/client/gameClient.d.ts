@@ -1,5 +1,5 @@
 import type { PieceColor } from "@/types/common/engine/piece";
-import type { GameUIState } from "@/client/components/GameUI";
+import type { GameUIState } from "@/client/pages/GamePage";
 
 export type ClientColor = PieceColor | "Spectator";
 

@@ -1,7 +1,7 @@
 @use "sass:map";
 @use "sass:color";
 
-@use "@/client/styles/Tile";
+@use "@/client/styles/components/Tile";
 
 // animation controls
 $duration: 0.6s;

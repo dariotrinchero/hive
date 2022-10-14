@@ -1,6 +1,6 @@
 import { h, VNode } from "preact";
 
-import "@/client/styles/Inventory";
+import "@/client/styles/components/Inventory";
 
 import { invertColor, pieceColors } from "@/common/engine/piece";
 import Notation from "@/common/engine/notation";

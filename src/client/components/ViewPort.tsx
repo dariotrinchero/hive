@@ -1,13 +1,13 @@
 import { ComponentChildren, h, VNode } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 import ConvertCoords, { SVGCoords } from "@/client/utility/convertCoords";
 
 export interface ViewPortProps {
     viewRange: [number, number]; // unzoomed, measured in hexagon radii
-    children: ComponentChildren;
     origin: SVGCoords;
     interactable?: boolean;
+    children: ComponentChildren;
 }
 
 interface Transform {
@@ -16,8 +16,6 @@ interface Transform {
 }
 
 export default function ViewPort(props: ViewPortProps): VNode {
-    const svgRef = useRef<SVGSVGElement>(null);
-
     const [dragStart, setDragStart] = useState<SVGCoords>([NaN, NaN]);
     const [transform, setTransform] = useState<Transform>({
         pan: [
@@ -37,18 +35,13 @@ export default function ViewPort(props: ViewPortProps): VNode {
     })), [props.origin[0], props.origin[1], props.viewRange[0], props.viewRange[1]]);
 
     /**
-     * Get mouse cursor coordinates from given mouse event, in the SVG coordinate system.
-     * Falls back on returning screen-space coordinates if the SVG to which we have a global
-     * reference does not exist.
+     * Get mouse cursor coordinates from given mouse event, in SVG coordinate system.
      * 
      * @param e mouse event, containing screen-space coordinates
      * @returns position at which mouse event occurred in SVG coordinates
      */
-    function mouseCoords(e: MouseEvent): SVGCoords {
-        const eventCoords: [number, number] = [e.clientX, e.clientY];
-        return svgRef.current
-            ? ConvertCoords.screenToSVG(svgRef.current, ...eventCoords)
-            : eventCoords;
+    function mouseCoords(e: h.JSX.TargetedMouseEvent<SVGSVGElement>): SVGCoords {
+        return ConvertCoords.screenToSVG(e.currentTarget, e.clientX, e.clientY);
     }
 
     /**
@@ -57,7 +50,7 @@ export default function ViewPort(props: ViewPortProps): VNode {
      * 
      * @param e wheel event representing user scrolling to adjust zoom
      */
-    function handleZoom(e: WheelEvent): void {
+    function handleZoom(e: h.JSX.TargetedWheelEvent<SVGSVGElement>): void {
         e.preventDefault();
         const mouse = mouseCoords(e);
         setTransform((prevTransform: Transform) => {
@@ -76,7 +69,7 @@ export default function ViewPort(props: ViewPortProps): VNode {
      * 
      * @param e mouse event representing mouse moving (while button 0 or 1 is held)
      */
-    function handlePan(e: MouseEvent): void {
+    function handlePan(e: h.JSX.TargetedMouseEvent<SVGSVGElement>): void {
         const mouse = mouseCoords(e);
         setTransform((prevTransform: Transform) => ({
             ...prevTransform,
@@ -84,13 +77,13 @@ export default function ViewPort(props: ViewPortProps): VNode {
         }));
     }
 
-    const getHandler = (pos: (e: MouseEvent) => SVGCoords, maxButton?: number) =>
-        (e: MouseEvent) => {
-            if (!maxButton || e.button <= maxButton) setDragStart(pos(e));
+    const getHandler = (pos?: SVGCoords, maxButton?: number) =>
+        (e: h.JSX.TargetedMouseEvent<SVGSVGElement>) => {
+            if (!maxButton || e.button <= maxButton) setDragStart(pos || mouseCoords(e));
         };
-    const handleMouseDown = getHandler(e => mouseCoords(e), 1);
-    const handleMouseUp = getHandler(() => [NaN, NaN], 1);
-    const handleMouseLeave = getHandler(() => [NaN, NaN]);
+    const handleMouseDown = getHandler(undefined, 1);
+    const handleMouseUp = getHandler([NaN, NaN], 1);
+    const handleMouseLeave = getHandler([NaN, NaN]);
 
     const vbSize = props.viewRange.map(r => 200 * r / transform.zoom);
     const handlers = props.interactable ? {
@@ -106,7 +99,6 @@ export default function ViewPort(props: ViewPortProps): VNode {
             width="100%"
             height="100%"
             viewBox={[...transform.pan, ...vbSize].join(" ")}
-            ref={svgRef}
             {...handlers}
         >
             {props.children}

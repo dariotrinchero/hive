@@ -1,6 +1,6 @@
 import { h, VNode } from "preact";
 
-import "@/client/styles/Header";
+import "@/client/styles/components/Header";
 
 import type { ClientColor } from "@/types/client/gameClient";
 import type { PieceColor } from "@/types/common/engine/piece";

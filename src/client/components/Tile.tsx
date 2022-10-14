@@ -1,13 +1,13 @@
 import { Fragment, h, VNode } from "preact";
 import { useContext } from "preact/hooks";
 
-import "@/client/styles/Tile";
+import "@/client/styles/components/Tile";
 
 import type { Piece } from "@/types/common/engine/piece";
 import type { BaseTileProps } from "@/types/client/tile";
 import type { SVGCoords } from "@/client/utility/convertCoords";
 
-import { UISettingContext } from "@/client/components/GameUI";
+import { UISettingContext } from "@/client/pages/GamePage";
 
 export type TileState = "Normal" | "Inactive" | "Selected" | "Shaking" | "Sliding" | "Dropping";
 export interface TileProps extends BaseTileProps {
@@ -47,11 +47,11 @@ export default function Tile(props: TileProps): VNode {
         );
     }
 
-    const mouseDown = (e?: MouseEvent) => {
+    const mouseDown = (e?: h.JSX.TargetedMouseEvent<SVGGElement>) => {
         e?.stopImmediatePropagation();
         if (props.state !== "Inactive" && props.handleClick) props.handleClick();
     };
-    const keyDown = (e: KeyboardEvent) => {
+    const keyDown = (e: h.JSX.TargetedKeyboardEvent<SVGGElement>) => {
         if (e.key === "Enter" || e.key === " ") mouseDown();
     };
     const translate = `translate: ${props.pos.join("px ")}px`;

@@ -1,56 +1,8 @@
-import type { Namespace, Socket } from "socket.io";
+import type { OptionalGameRules } from "@/types/common/engine/game";
+import type { ColorAssignmentRule, StartingColor } from "@/types/server/gameManager";
 
-import type HiveGame from "@/common/engine/game";
-
-import type { PieceColor } from "@/types/common/engine/piece";
-import type { ClientToServer, ClientType, InterServer, ServerToClient, SocketData } from "@/types/common/socket";
-
-export type OnlineSessions = {
-    [sessionId: string]: number; // counts # connections client has open
-};
-
-// starting color & color assignment
-export type StartingColor = PieceColor | "Random";
-export type ColorAssignmentRule = `FirstJoinIs${PieceColor}`
-    | "Random"
-    | {
-        sessionId: string;
-        color: PieceColor;
-    };
-
-// game details
-export interface GameDetails {
-    game: HiveGame;
-    nsp: Namespace<ClientToServer, ServerToClient, InterServer, SocketData>;
-    online: Record<ClientType, OnlineSessions>;
-    playerColors: {
-        byId: { [sessionId: string]: PieceColor; };
-        rule: ColorAssignmentRule;
-    };
+export interface NewGameRequest {
+    colorAssignmentRule: ColorAssignmentRule;
+    startingColor: StartingColor;
+    gameRules?: OptionalGameRules;
 }
-export type ActiveGames = {
-    [gameId: string]: GameDetails;
-};
-
-// client details
-export type IOSocket = Socket<ClientToServer, ServerToClient, InterServer, SocketData>;
-export type IONamespace = Namespace<ClientToServer, ServerToClient, InterServer, SocketData>;
-
-interface ClientDetailBase {
-    sessionId: string;
-    clientType: ClientType;
-    gameId: string;
-    gameDetails: GameDetails;
-    socket: IOSocket;
-}
-
-interface PlayerDetails extends ClientDetailBase {
-    clientType: "Player";
-    color: PieceColor;
-}
-
-interface SpectatorDetails extends ClientDetailBase {
-    clientType: "Spectator";
-}
-
-export type ClientDetails = PlayerDetails | SpectatorDetails;

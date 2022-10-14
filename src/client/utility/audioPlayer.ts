@@ -23,7 +23,7 @@ const defaultGain = 0.3; // TODO set this to something sensible
  * Simple utility class to load & play sound effects on demand. Implemented using Web
  * Audio API, documentation for which is linked. 
  * 
- * @link https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API
+ * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API}
  */
 export default abstract class AudioPlayer {
     private static audioContext: AudioContext;

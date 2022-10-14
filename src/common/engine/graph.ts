@@ -208,7 +208,7 @@ export default class GraphUtils<V> {
      * Find all 'cut vertices' - ie. vertices whose removal increases the number of connected components
      * of graph (as opposed to 'biconnected' vertices) - using algorithm by Tarjan & Hopcroft (see link).
      * 
-     * @link https://en.wikipedia.org/wiki/Biconnected_component
+     * @see {@link https://en.wikipedia.org/wiki/Biconnected_component}
      * @param source any vertex in graph at which to begin search
      * @param adj adjacency function defining graph
      * @returns function to test whether given vertex is a cut vertex (connected to source vertex)

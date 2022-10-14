@@ -1,7 +1,7 @@
 import { createContext, h, VNode } from "preact";
 import { useMemo, useState } from "preact/hooks";
 
-import "@/client/styles/GameUI";
+import "@/client/styles/pages/GamePage";
 
 import HiveGame from "@/common/engine/game";
 import GameClient from "@/client/utility/gameClient";
@@ -55,7 +55,7 @@ const initUISettings: UISettings = { cornerRad: 100 / 6, hexGap: 100 / 18 };
 
 export const UISettingContext = createContext<UISettings>(initUISettings);
 
-export default function GameUI(): VNode {
+export default function GamePage(): VNode {
     const [boardOrigin, setBoardOrigin] = useState<LatticeCoords>([0, 0]);
     const [placeholders, setPlaceholders] = useState<Placeholders>(initPlaceholders);
     const [specialTile, setSpecialTile] = useState<SpecialTile>();

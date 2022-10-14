@@ -1,7 +1,7 @@
 import { ComponentChildren, h, VNode } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
-import "@/client/styles/Tabs";
+import "@/client/styles/components/Tabs";
 
 export interface TabsProps {
     tabDefs: {

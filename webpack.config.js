@@ -8,7 +8,7 @@ const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
 const { DefinePlugin } = require("webpack");
 
 module.exports = (env, args) => {
-    // check if running in production mode
+    // Check if running in production mode
     const inProd = () => args.mode !== "development";
 
     // Config shared by client & server:
@@ -52,23 +52,22 @@ module.exports = (env, args) => {
                 writeToDisk: (filePath) => /server\.js$/.test(filePath)
             },
             compress: true,
-            hot: false,
-            liveReload: true,
+            hot: true,
             port: env.DEV_PORT,
-            open: publicPath,
-            proxy: {
-                '/socket.io': {
+            open: publicPath, // launch dev game
+            proxy: [
+                {
+                    context: [ "/api", "/game" ],
                     target: `http://localhost:${env.PORT}`,
-                    ws: true,
                 },
-            },
+                {
+                    context: [ "/socket.io" ],
+                    target: `http://localhost:${env.PORT}`,
+                    ws: true
+                }
+            ],
         },
     };
-    const injectEnv = inProd() ? [] : [
-        new DefinePlugin({ // inject environment variable into webpage process.env
-            "process.env.AUTOKILL": JSON.stringify(env.AUTOKILL)
-        })
-    ];
 
     return [
         {
@@ -82,6 +81,13 @@ module.exports = (env, args) => {
             },
             target: 'node',
             externals: [ nodeExternals() ],
+            plugins: inProd() ? [] : [
+                new DefinePlugin({
+                    // Inject dev environment variables into process.env
+                    "process.env.PORT": JSON.stringify(env.PORT),
+                    "process.env.GAME_ID": JSON.stringify(env.GAME_ID)
+                })
+            ],
             ...common,
         },
         {
@@ -93,15 +99,21 @@ module.exports = (env, args) => {
                 path: path.resolve(__dirname, 'dist/client'),
                 assetModuleFilename: 'assets/[name].[contenthash][ext]',
                 clean: true,
-                publicPath
+                publicPath // must be here or dev game page is proxied to Express, breaking AUTOKILL
             },
             plugins: [
                 new HtmlWebpackPlugin({ // emit index.html with injected script tag referencing bundle
                     inject: true,
                     template: path.resolve(__dirname, 'index.html'),
+                    favicon: path.resolve(__dirname, 'favicon.ico')
                 }),
                 new MiniCssExtractPlugin({ filename: '[name].[contenthash].css' }),
-                ...injectEnv
+                new DefinePlugin({
+                    // Inject environment variables into process.env; note we must define
+                    // process.env.AUTOKILL even when it is false, or we get the exception
+                    // "process is not defined" when trying to read from it.
+                    "process.env.AUTOKILL": JSON.stringify(env.AUTOKILL)
+                })
             ],
             ...common,
             ...devServer

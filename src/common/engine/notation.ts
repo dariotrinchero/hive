@@ -12,8 +12,8 @@ export type ParseError = "ParseError";
  * Utility class implementing static functions for converting to/from official Hive notation,
  * as documented in included links.
  * 
- * @link https://entomology.gitlab.io/notation.html
- * @link https://www.boardspace.net/english/about_hive_notation.html
+ * @see {@link https://entomology.gitlab.io/notation.html}
+ * @see {@link https://www.boardspace.net/english/about_hive_notation.html}
  */
 export default class Notation {
     /**

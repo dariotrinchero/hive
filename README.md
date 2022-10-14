@@ -4,17 +4,21 @@ This is a minimal web implementation of the two-player abstract strategy game Hi
 ## Project structure
 
 The project consists of two components, which are compiled (mostly) separately:
-- client code, which runs in a browser, is found in
+- Preact & Socket.io **client** code, which runs in a browser, is found in
     ```src/client```,
     and has entry point
     ```src/client/app.tsx```
-- server code, which runs in Node.js, is found in
+- Express & Socket.io **server** code, which runs in Node.js, is found in
     ```src/server```,
     and has entry point
     ```src/server/index.ts```
 
-Some code is shared by the client and server - namely, that in
-```src/common```. This consists mainly of the game logic. The game logic code is duplicated in this way because the
+**The client** serves as a Hive **viewer** - that is, it shows the current state of the game & allows interaction - and handles API calls and websocket connections with the server to enable synchronous multiplayer.
+
+**The server** manages the state of active games, and hosts a REST API for creating/deleting games. It also relays real-time moves between clients over websockets.
+
+Some code is **shared** by the client and server - namely, that in
+```src/common```. This is mainly the Hive **engine** - that is, the logic that understands the rules of Hive, presenting an API to make moves, get legal moves, etc. The engine code runs on both client and server because the
 1. *server* should be authoratative on the game state, and enforce legality of moves
 2. *client* should be able to quickly compute & display legal moves without having to query the server
 
@@ -47,8 +51,9 @@ which will recompile whenever the source files change, and should automatically 
 ```bash
 npm run serve-dev
 ```
-which will also re-launched the server whenever the compiled server code changes.
+which will also re-launch the server whenever the compiled server code changes.
 
+Note that `npm start` will serve the client page using Webpack DevServer (and not the Node Express server included in the source), since this enables hot reloading. Webpack DevServer runs on a different port to the Node server, and simply *proxies* websocket connections & API calls to the port of the Node server, allowing the two to coexist. However, this means that none of the *Express* routing / middleware pertaining to serving the client page (such as the 404 error message, etc) will be run with the above commands.
 
 There is also the alternative script
 ```bash

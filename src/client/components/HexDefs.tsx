@@ -5,7 +5,7 @@ import icons from "@/client/assets/icons.json";
 import type { PieceType } from "@/types/common/engine/piece";
 import { useContext, useEffect, useState } from "preact/hooks";
 
-import { UISettingContext } from "@/client/components/GameUI";
+import { UISettingContext } from "@/client/pages/GamePage";
 
 function HexDefs(): VNode {
     const [bugPaths, setBugPaths] = useState<Record<PieceType, string>>();
