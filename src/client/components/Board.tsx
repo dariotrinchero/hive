@@ -31,7 +31,7 @@ export interface BoardProps {
 }
 
 // TODO make this vary with screen width
-const viewRange: [number, number] = [5.3, 5.3];
+const viewRange: [number, number] = [1.3, 6.0];
 
 interface HoveredPlaceholder {
     type: MovementType;

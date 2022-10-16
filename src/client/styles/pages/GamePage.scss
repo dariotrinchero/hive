@@ -29,12 +29,12 @@ div#play-area {
         width: $width;
         min-width: min-content;
         pointer-events: none;
-    
+
         position: absolute;
         left: $margin;
         top: $margin;
         bottom: $margin;
-    
+
         &>* {
             flex-grow: 1;
             display: flex;
