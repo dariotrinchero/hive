@@ -1,20 +1,21 @@
 import { createContext, h, VNode } from "preact";
 import { useMemo, useState } from "preact/hooks";
 
-import "@/client/styles/pages/GamePage";
+import "@/client/styles/pages/Game";
 
 import HiveGame from "@/common/engine/game";
 import GameClient from "@/client/utility/gameClient";
 import HexGrid from "@/common/engine/hexGrid";
-import ConvertCoords, { SVGCoords } from "@/client/utility/convertCoords";
+import ConvertCoords from "@/client/utility/convertCoords";
 import Notation from "@/common/engine/notation";
 
 import type { Piece } from "@/types/common/engine/piece";
-import type { MoveOptions, TurnResult } from "@/types/common/engine/outcomes";
 import type { GameState } from "@/types/common/socket";
-import type { ClientColor } from "@/types/client/gameClient";
 import type { LatticeCoords, PosToPiece } from "@/types/common/engine/hexGrid";
 import type { PathMap } from "@/types/common/engine/graph";
+import type { GameStatus } from "@/types/common/engine/game";
+import type { ClientColor } from "@/types/client/gameClient";
+import type { MoveOptions, TurnResult } from "@/types/common/engine/outcomes";
 
 import Board from "@/client/components/Board";
 import Spinner from "@/client/components/Spinner";
@@ -22,16 +23,13 @@ import HexDefs from "@/client/components/HexDefs";
 import Header from "@/client/components/Header";
 import Inventory from "@/client/components/Inventory";
 import Tabs from "@/client/components/Tabs";
-import Tile, { TileState } from "@/client/components/Tile";
+import Tile, { TileProps, TileStatus } from "@/client/components/Tile";
+
+import Error404 from "@/client/pages/Error404";
 
 type TileParent = "Inventory" | "Board";
-interface SpecialTile {
-    // tile with special state (eg. selected, just placed, shaking, etc)
-    piece: Piece;
-    pos: LatticeCoords;
+interface SpecialTile extends TileProps { // tile with special state (eg. selected, shaking, etc)
     parent: TileParent;
-    state: TileState; // special state of this tile
-    animateFrom?: SVGCoords;
 }
 
 export interface Placeholders {
@@ -39,8 +37,9 @@ export interface Placeholders {
     pathMap?: PathMap<LatticeCoords>;
 }
 
+export type GamePageStatus = GameStatus | "Pending" | "NonExistent";
 export interface GameUIState extends GameState {
-    started: boolean;
+    status: GamePageStatus;
     lastTurn: TurnResult | undefined;
 }
 
@@ -55,7 +54,7 @@ const initUISettings: UISettings = { cornerRad: 100 / 6, hexGap: 100 / 18 };
 
 export const UISettingContext = createContext<UISettings>(initUISettings);
 
-export default function GamePage(): VNode {
+export default function Game(): VNode {
     const [boardOrigin, setBoardOrigin] = useState<LatticeCoords>([0, 0]);
     const [placeholders, setPlaceholders] = useState<Placeholders>(initPlaceholders);
     const [specialTile, setSpecialTile] = useState<SpecialTile>();
@@ -64,7 +63,7 @@ export default function GamePage(): VNode {
     const [gameState, setGameState] = useState<GameUIState>({
         ...HiveGame.initialState(),
         lastTurn: undefined,
-        started: false
+        status: "Pending"
     });
 
     // TODO add ability to modify these settings
@@ -73,18 +72,18 @@ export default function GamePage(): VNode {
 
     const gameClient: GameClient = useMemo(() => new GameClient(
         (state, recenter) => {
-            if (recenter) setBoardOrigin(averagePos(state.posToPiece));
+            if (recenter) recenterBoard(state.posToPiece);
             setGameState(state);
             clearSelection();
 
             if (state.lastTurn?.status === "Ok" && state.lastTurn.turnType !== "Pass") {
                 const { destination, piece, turnType } = state.lastTurn;
                 setSpecialTile({
-                    animateFrom: turnType === "Movement" ? state.lastTurn.origin : undefined,
                     parent: "Board",
                     piece,
                     pos: destination,
-                    state: turnType === "Movement" ? "Sliding" : "Dropping"
+                    slideFrom: turnType === "Movement" ? state.lastTurn.origin : undefined,
+                    status: turnType === "Movement" ? "Sliding" : "Dropping"
                 });
             }
         }
@@ -93,21 +92,22 @@ export default function GamePage(): VNode {
     const playerColor: ClientColor = gameClient.getPlayerColor();
 
     /**
-     * Calculate average position (center of mass) of all pieces.
+     * Calculate average position (center of mass) of all given piece positions, then center board
+     * origin on this position.
      * 
-     * @returns averate position of pieces (in lattice coordinates)
+     * @param posToPiece record of current piece positions around which to recenter
      */
-    function averagePos(posToPiece: PosToPiece): LatticeCoords {
+    function recenterBoard(posToPiece: PosToPiece): void {
         const average: LatticeCoords = [0, 0];
         const length = Object.keys(posToPiece).length || 1;
 
-        HexGrid.entriesOfPosRecord(posToPiece).forEach(entry => {
-            average[0] += entry[0][0];
-            average[1] += entry[0][1];
+        HexGrid.entriesOfPosRecord(posToPiece).forEach(([pos, _piece]) => {
+            average[0] += pos[0];
+            average[1] += pos[1];
         });
         average[0] /= length;
         average[1] /= length;
-        return average;
+        setBoardOrigin(average);
     }
 
     /**
@@ -130,22 +130,22 @@ export default function GamePage(): VNode {
     function handleTileClick(piece: Piece, pos: LatticeCoords, parent: TileParent): void {
         if (playerColor === "Spectator") return;
 
-        if (specialTile?.state === "Selected"
+        if (specialTile?.status === "Selected"
             && HexGrid.eqPiece(specialTile.piece, piece)) clearSelection();
         else {
+            gameClient.cancelPremove();
             setPlaceholders(initPlaceholders);
             const outcome = gameClient.game.getMoves({
                 currCol: playerColor,
                 piece,
                 turnType: parent === "Inventory" ? "Placement" : "Movement"
             });
-            const premove = playerColor !== gameState.currTurnColor;
 
             if (outcome.status === "Ok") {
-                setSpecialTile({ ...outcome, parent, pos, state: "Selected" });
+                setSpecialTile({ ...outcome, parent, pos, status: "Selected" });
                 setPlaceholders({ ...outcome });
             } else {
-                setSpecialTile({ ...outcome, parent, piece, pos, state: "Shaking" });
+                setSpecialTile({ ...outcome, parent, piece, pos, status: "Shaking" });
                 setShakeKey((prev: number) => -prev);
                 console.error(`No legal moves; getMoves() gave message: ${outcome.message}`);
             }
@@ -162,20 +162,20 @@ export default function GamePage(): VNode {
      * @returns Tile representing given piece at given location
      */
     function renderTile(piece: Piece, pos: LatticeCoords, parent: TileParent, inactive?: boolean): VNode {
-        let state: TileState = "Inactive";
+        let state: TileStatus = "Inactive";
         if (playerColor !== "Spectator" && !inactive) {
             if (specialTile?.parent === parent
-                && HexGrid.eqPiece(piece, specialTile.piece)) state = specialTile.state;
-            else if (specialTile?.state !== "Selected" || parent === "Inventory") state = "Normal";
+                && HexGrid.eqPiece(piece, specialTile.piece)) state = specialTile.status;
+            else if (specialTile?.status !== "Selected" || parent === "Inventory") state = "Normal";
         }
         return (
             <Tile
                 key={`${Notation.pieceToString(piece)}${state === "Shaking" ? shakeKey : ""}`}
                 piece={piece}
                 pos={svgCoords(pos)}
-                slideFrom={specialTile?.animateFrom && svgCoords(specialTile.animateFrom)}
+                slideFrom={specialTile?.slideFrom && svgCoords(specialTile.slideFrom)}
                 handleClick={() => handleTileClick(piece, pos, parent)}
-                state={state}
+                status={state}
             />
         );
     }
@@ -230,12 +230,31 @@ export default function GamePage(): VNode {
     }
 
     function renderPlayArea(): VNode {
-        if (!gameState.started) return <Spinner />;
+        if (gameState.status === "Pending") return <Spinner />;
+        if (gameState.status === "NonExistent") return <Error404 />;
+
         const renderBoardTile = (piece: Piece, pos: LatticeCoords, inactive?: boolean) =>
             renderTile(piece, pos, "Board", inactive);
+
+        // TODO maybe split this function off
         const attemptMove = (destination: LatticeCoords) => {
-            clearSelection();
-            if (!specialTile?.piece) return;
+            if (!specialTile?.piece) {
+                clearSelection();
+                gameClient.cancelPremove();
+                return;
+            }
+            if (playerColor !== gameState.currTurnColor) { // move is a premove
+                // TODO handle premoves properly
+                setSpecialTile(undefined);
+                setPlaceholders(prev => {
+                    const destStr = destination.join(",");
+                    return {
+                        ...prev,
+                        options: { [destStr]: prev.options[destStr] }
+                    };
+                });
+            } else clearSelection();
+
             gameClient.queueMove({
                 destination,
                 piece: specialTile.piece,
@@ -252,7 +271,7 @@ export default function GamePage(): VNode {
                     placeholders={placeholders}
                     handlePlaceholderClick={attemptMove}
                     pieces={gameState.posToPiece}
-                    sliding={specialTile?.state === "Sliding" ? specialTile.piece : undefined}
+                    sliding={specialTile?.status === "Sliding" ? specialTile.piece : undefined}
                     renderTile={renderBoardTile}
                 />
             </div>
@@ -264,7 +283,7 @@ export default function GamePage(): VNode {
             <Header
                 currTurnColor={gameState.currTurnColor}
                 playerColor={playerColor}
-                started={gameState.started}
+                status={gameState.status}
             />
             <HexDefs />
             {renderPlayArea()}

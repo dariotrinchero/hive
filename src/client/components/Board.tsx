@@ -1,4 +1,4 @@
-import { Fragment, h, VNode } from "preact";
+import type { h, VNode } from "preact";
 import { useContext, useLayoutEffect, useState } from "preact/hooks";
 
 import "@/client/styles/components/Board";
@@ -10,7 +10,7 @@ import type { MovementType } from "@/types/common/engine/outcomes";
 import HexGrid from "@/common/engine/hexGrid";
 import ConvertCoords from "@/client/utility/convertCoords";
 
-import { Placeholders, UISettingContext } from "@/client/pages/GamePage";
+import { Placeholders, UISettingContext } from "@/client/pages/Game";
 
 import Placeholder from "@/client/components/Placeholder";
 import ViewPort from "@/client/components/ViewPort";
@@ -44,7 +44,9 @@ export default function Board(props: BoardProps): VNode {
     const svgCoords = (p: LatticeCoords) => ConvertCoords.hexLatticeToSVG(hexGap, ...p);
 
     const [hovered, setHovered] = useState<HoveredPlaceholder>(initHovered);
-    useLayoutEffect(() => setHovered(initHovered), [props.placeholders]);
+    useLayoutEffect(() => {
+        if (!Object.keys(props.placeholders.options).length) setHovered(initHovered);
+    }, [props.placeholders]);
 
     /**
      * Render move path, representing path to be taken for highlighted move.
@@ -65,40 +67,34 @@ export default function Board(props: BoardProps): VNode {
      * @returns array containing Placeholder component for each placeholder on board
      */
     function renderPlaceholders(): VNode[] {
-        return HexGrid.entriesOfPosRecord(props.placeholders.options).map(([pos, type]) => {
-            const handleClick = () => {
-                props.handlePlaceholderClick(pos);
-                setHovered(initHovered);
-            };
-            return (
-                <Placeholder
-                    key={`${pos.join(",")}${type}`}
-                    pos={svgCoords(pos)}
-                    handleClick={handleClick}
-                    handleMouseEnter={() => setHovered({ pos, type })}
-                    type={type}
-                />
-            );
-        });
+        return HexGrid.entriesOfPosRecord(props.placeholders.options).map(([pos, type]) => (
+            <Placeholder
+                key={`${pos.join(",")}${type}`}
+                pos={svgCoords(pos)}
+                handleClick={() => props.handlePlaceholderClick(pos)}
+                handleMouseEnter={() => setHovered({ pos, type })}
+                type={type}
+            />
+        ));
     }
 
     /**
      * Render tiles for each of the current game pieces, ensuring sliding tile renders last
      * (ie. on top).
      * 
-     * @returns Fragment containing a child Tile for each piece on board
+     * @returns fragment containing a child Tile for each piece on board
      */
     function renderTiles(): VNode {
         let slidingPos: LatticeCoords;
         const slidingTile = (piece: Piece) => (
-            <Fragment>
+            <>
                 {piece.covering && props.renderTile(piece.covering, slidingPos, true)}
                 {props.renderTile(piece, slidingPos)}
-            </Fragment>
+            </>
         );
 
         return (
-            <Fragment>
+            <>
                 {HexGrid.entriesOfPosRecord(props.pieces).map(([pos, piece]) => {
                     if (props.sliding && HexGrid.eqPiece(piece, props.sliding)) {
                         slidingPos = pos;
@@ -107,7 +103,7 @@ export default function Board(props: BoardProps): VNode {
                     return props.renderTile(piece, pos);
                 })}
                 {props.sliding && slidingTile(props.sliding)}
-            </Fragment>
+            </>
         );
     }
 

@@ -1,10 +1,8 @@
 import type { RequestHandler } from "express";
 
-import type { NewGameRequest } from "@/types/server/gameServer";
+import type { NewGameRequest, UUIDv4 } from "@/types/server/gameServer";
 import type { ColorAssignmentRule, StartingColor } from "@/types/server/gameManager";
 import type { OptionalGameRules } from "@/types/common/engine/game";
-
-type UUIDv4 = string;
 
 /**
  * Utility class containing static methods to perform runtime type validation of various object

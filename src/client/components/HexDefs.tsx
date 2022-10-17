@@ -1,11 +1,11 @@
-import { h, VNode } from "preact";
+import type { h, VNode } from "preact";
 
 import icons from "@/client/assets/icons.json";
 
 import type { PieceType } from "@/types/common/engine/piece";
 import { useContext, useEffect, useState } from "preact/hooks";
 
-import { UISettingContext } from "@/client/pages/GamePage";
+import { UISettingContext } from "@/client/pages/Game";
 
 function HexDefs(): VNode {
     const [bugPaths, setBugPaths] = useState<Record<PieceType, string>>();
@@ -46,7 +46,7 @@ function HexDefs(): VNode {
     /**
      * Render placeholder group (with ID #placeholder).
      * 
-     * @returns Fragment containing a child group containing prototypical placeholder
+     * @returns group containing prototypical placeholder
      */
     function renderPlaceholderDef(): VNode {
         return (

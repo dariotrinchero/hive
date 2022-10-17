@@ -1,4 +1,4 @@
-import { ComponentChildren, h, VNode } from "preact";
+import type { ComponentChildren, h, VNode } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import ConvertCoords, { SVGCoords } from "@/client/utility/convertCoords";

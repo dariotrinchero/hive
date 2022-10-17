@@ -91,9 +91,9 @@ export default class HiveGame extends HexGrid {
 
         // exclude unused expansion pieces from inventory
         const inventory: PieceCount = Object.fromEntries(
-            Object.entries(fullInventory).filter(entry => {
-                if (!(entry[0] in this.rules.expansions)) return true;
-                const expansion = entry[0] as ExpansionPieceType;
+            Object.entries(fullInventory).filter(([type, _number]) => {
+                if (!(type in this.rules.expansions)) return true;
+                const expansion = type as ExpansionPieceType;
                 return this.rules.expansions[expansion];
             })
         ) as PieceCount;
@@ -489,7 +489,7 @@ export default class HiveGame extends HexGrid {
         piece.height = pieceAtFromPos.height;
 
         // externalized checks
-        if (this.isImmobile(from)) return "PieceJustMoved";
+        if (colorToMove === this.currTurnColor && this.isImmobile(from)) return "PieceJustMoved";
         if (!this.checkOneHive(piece, from)) return "OneHiveRule";
         if (colorToMove !== piece.color) {
             // to move piece of opponent color, there must be valid pillbugs adjacent

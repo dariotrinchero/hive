@@ -28,6 +28,15 @@ module.exports = {
         "indent": [ "error", 4, {
             "SwitchCase": 1
         } ],
+        "no-unused-vars": "off",
+        "@typescript-eslint/no-unused-vars": [
+            "warn",
+            {
+                "argsIgnorePattern": "^_",
+                "varsIgnorePattern": "^_",
+                "caughtErrorsIgnorePattern": "^_"
+            }
+        ],
         "linebreak-style": [ "error", "unix" ],
         "quotes": [ "error", "double" ],
         "semi": [ "error", "always" ],

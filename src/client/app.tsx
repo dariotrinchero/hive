@@ -1,40 +1,21 @@
-import { h, render } from "preact";
+import { h, render, VNode } from "preact";
+import { Route, Router } from "preact-router";
 
 import Routes from "@/common/routes";
 
-import type { NewGameRequest } from "@/types/server/gameServer";
+import Home from "@/client/pages/Home";
+import Game from "@/client/pages/Game";
+import Error404 from "@/client/pages/Error404";
 
-import GamePage from "@/client/pages/GamePage";
+const Main: () => VNode = () => (
+    <Router>
+        <Route path={Routes.home} component={Home} />
+        <Route path={Routes.joinGame(":gameId")} component={Game} />
+        <Route component={Error404} default />
+    </Router>
+);
 
-// TODO temporary; eventually we want to make requests from a game creation form
-const newGameRequest: NewGameRequest = {
-    colorAssignmentRule: "FirstJoinIsWhite",
-    gameRules: {
-        expansions: {
-            Ladybug: true,
-            Mosquito: true,
-            Pillbug: true
-        },
-        noFirstQueen: true
-    },
-    startingColor: "Black"
-};
-fetch(Routes.newGame(), {
-    body: JSON.stringify(newGameRequest),
-    credentials: "same-origin",
-    headers: {
-        "Content-Type": "application/json"
-    },
-    method: "POST",
-    mode: "cors",
-    redirect: "follow"
-})
-    .then(res => res.text())
-    .then(message => {
-        console.log(message);
-        render(
-            <GamePage />,
-            document.body
-        );
-    })
-    .catch(err => console.error("Failed to create game due to error", err));
+render(
+    <Main />,
+    document.body
+);

@@ -6,3 +6,9 @@ export interface NewGameRequest {
     startingColor: StartingColor;
     gameRules?: OptionalGameRules;
 }
+
+export type UUIDv4 = string;
+
+export interface NewGameResponse extends NewGameRequest {
+    gameId: UUIDv4;
+}

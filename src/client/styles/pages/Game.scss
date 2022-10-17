@@ -7,12 +7,15 @@ $background: hsl(0, 0%, 98%);
 
 body,
 html {
-    display: flex;
-    flex-flow: column nowrap;
     height: 100%;
     padding: 0px;
     margin: 0px;
     // overflow: hidden; // TODO delete this if unneeded
+}
+
+body {
+    display: flex;
+    flex-flow: column nowrap;
 }
 
 div#play-area {

@@ -1,4 +1,4 @@
-import { h, VNode } from "preact";
+import type { h, VNode } from "preact";
 
 import "@/client/styles/components/Inventory";
 
@@ -32,7 +32,7 @@ function Inventory(props: InventoryProps): VNode {
         return (
             <div id="inventory-panel">
                 {Object.entries(props.inventories[color])
-                    .filter(entry => entry[1] > 0)
+                    .filter(([_type, amount]) => amount > 0)
                     .map(([type, amount]) => {
                         const piece = { color, height: amount, type: type as PieceType };
                         const key = `${Notation.pieceToString(piece)}x${amount}`;

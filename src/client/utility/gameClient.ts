@@ -10,6 +10,7 @@ import type { ClientColor, ReRenderFn } from "@/types/client/gameClient";
 import type { ClientToServer, GameState, ServerToClient, TurnRequestResult } from "@/types/common/socket";
 import type { GenericTurnAttempt, SpecificTurnAttempt, TurnAttempt, TurnResult } from "@/types/common/engine/outcomes";
 import type { OptionalGameRules } from "@/types/common/engine/game";
+import type { GamePageStatus } from "@/client/pages/Game";
 
 // key used to persist session ID in local storage
 const localStorageSessionIdName = "sessionId";
@@ -27,16 +28,16 @@ export default class GameClient {
     private premove?: SpecificTurnAttempt;
 
     // rendering callback
-    private readonly rerender: (lastTurn?: TurnResult, recenter?: boolean) => void;
+    private readonly rerender: (lastTurn?: TurnResult, recenter?: boolean, status?: GamePageStatus) => void;
 
     constructor(rerender: ReRenderFn) {
         this.playerColor = "Spectator";
         this.bothJoined = false;
-        this.rerender = (lastTurn, recenter) => rerender(
+        this.rerender = (lastTurn, recenter, status) => rerender(
             {
                 ...this.game.getState(),
                 lastTurn,
-                started: this.bothJoined
+                status: status || (this.bothJoined ? this.game.checkGameStatus() : "Pending")
             },
             recenter || false
         );
@@ -68,7 +69,8 @@ export default class GameClient {
         });
 
         this.socket.on("connect_error", err => {
-            console.error("Error connecting", err); // TODO display error to user
+            console.error("Error connecting", err);
+            this.rerender(undefined, undefined, "NonExistent");
 
             // environment variable set in package.json & injected by webpack
             if (process.env.AUTOKILL) window.close();

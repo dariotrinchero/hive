@@ -3,22 +3,14 @@
  */
 export default class Routes {
     /**
-     * Get route for home page.
-     * 
-     * @returns route for home page
+     * Route for home page.
      */
-    public static home(): string {
-        return "/";
-    }
+    public static readonly home = "/";
 
     /**
      * Route for POST method API request to create new game.
-     * 
-     * @returns route for API call to create game
      */
-    public static newGame(): string {
-        return "/api/new-game/";
-    }
+    public static readonly newGame = "/api/new-game/";
 
     /**
      * Route for DELETE method API request to delete existing game.

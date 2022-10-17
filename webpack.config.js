@@ -43,7 +43,6 @@ module.exports = (env, args) => {
     };
 
     // Dev-server config:
-    const publicPath = inProd() ? undefined : `/game/${env.GAME_ID}/`;
     const devServer = inProd() ? {} : {
         devServer: {
             static: { directory: path.resolve(__dirname, 'dist/client') },
@@ -52,12 +51,13 @@ module.exports = (env, args) => {
                 writeToDisk: (filePath) => /server\.js$/.test(filePath)
             },
             compress: true,
+            historyApiFallback: true,
             hot: true,
             port: env.DEV_PORT,
-            open: publicPath, // launch dev game
+            open: "/", // `/game/${env.GAME_ID}/`, // launch dev game
             proxy: [
                 {
-                    context: [ "/api", "/game" ],
+                    context: [ "/api" ],
                     target: `http://localhost:${env.PORT}`,
                 },
                 {
@@ -99,7 +99,7 @@ module.exports = (env, args) => {
                 path: path.resolve(__dirname, 'dist/client'),
                 assetModuleFilename: 'assets/[name].[contenthash][ext]',
                 clean: true,
-                publicPath // must be here or dev game page is proxied to Express, breaking AUTOKILL
+                publicPath: "/"
             },
             plugins: [
                 new HtmlWebpackPlugin({ // emit index.html with injected script tag referencing bundle
