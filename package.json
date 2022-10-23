@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "description": "Minimal web implementation of the two-player abstract strategy game Hive.",
   "main": "src/server/index.ts",
+  "author": "doormango",
+  "license": "Unlicense",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "engineStrict": true,
   "config": {
     "devGameId": "development-game",
     "devServerPort": 8080,
@@ -18,8 +24,6 @@
     "test": "jest --coverage",
     "tmux": "tmux new-session -A -s hive \\; set-hook -t 0 pane-exited 'kill-session -t hive' \\; respawnw -k -t 0 'npm start AUTOKILL' \\; neww -k -t 1 'npm run serve-dev' \\; joinp -h -s 1.0 -t 0.0 \\; neww -t 1 \\; joinp -v -s 1.0 -t 0.1 \\; send 'firefox --private-window http://localhost:$npm_package_config_devServerPort/game/$npm_package_config_devGameId/'"
   },
-  "author": "doormango",
-  "license": "ISC",
   "devDependencies": {
     "@types/express": "^4.17.14",
     "@types/hash-sum": "^1.0.0",

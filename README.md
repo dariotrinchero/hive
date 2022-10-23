@@ -1,3 +1,5 @@
+[![Node.js CI](https://github.com/Doormango/hive/actions/workflows/node.js.yml/badge.svg)](https://github.com/Doormango/hive/actions/workflows/node.js.yml)
+
 # Hive
 This is a minimal web implementation of the two-player abstract strategy game Hive.
 

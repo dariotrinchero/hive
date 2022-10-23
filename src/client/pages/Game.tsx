@@ -162,20 +162,20 @@ export default function Game(): VNode {
      * @returns Tile representing given piece at given location
      */
     function renderTile(piece: Piece, pos: LatticeCoords, parent: TileParent, inactive?: boolean): VNode {
-        let state: TileStatus = "Inactive";
+        let status: TileStatus = "Inactive";
         if (playerColor !== "Spectator" && !inactive) {
             if (specialTile?.parent === parent
-                && HexGrid.eqPiece(piece, specialTile.piece)) state = specialTile.status;
-            else if (specialTile?.status !== "Selected" || parent === "Inventory") state = "Normal";
+                && HexGrid.eqPiece(piece, specialTile.piece)) status = specialTile.status;
+            else if (specialTile?.status !== "Selected" || parent === "Inventory") status = "Normal";
         }
         return (
             <Tile
-                key={`${Notation.pieceToString(piece)}${state === "Shaking" ? shakeKey : ""}`}
+                key={`${Notation.pieceToString(piece)}${status === "Shaking" ? shakeKey : ""}`}
                 piece={piece}
                 pos={svgCoords(pos)}
                 slideFrom={specialTile?.slideFrom && svgCoords(specialTile.slideFrom)}
                 handleClick={() => handleTileClick(piece, pos, parent)}
-                status={state}
+                status={status}
             />
         );
     }
